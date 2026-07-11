@@ -1,0 +1,52 @@
+{
+  "items": [
+    {
+      "name": "Kindle Substrate",
+      "priority": -20,
+      "items": [
+        {
+          "name": "Enable Tweaks",
+          "action": "./bin/control.sh",
+          "params": "enable",
+          "exitmenu": true,
+          "internal": "status Enabling Kindle Substrate tweaks"
+        },
+        {
+          "name": "Disable Tweaks",
+          "action": "./bin/control.sh",
+          "params": "disable",
+          "exitmenu": true,
+          "internal": "status Disabling Kindle Substrate tweaks"
+        },
+        {
+          "name": "Reframe Active Session",
+          "action": "./bin/control.sh",
+          "params": "reframe",
+          "exitmenu": true,
+          "internal": "status Reframing Kindle Substrate session"
+        },
+        {
+          "name": "Status: Active",
+          "action": ":",
+          "if": "\"/var/local/ksubstrate/runtime/state/session.plan\" -f",
+          "exitmenu": false,
+          "status": false
+        },
+        {
+          "name": "Status: Disabled",
+          "action": ":",
+          "if": "\"/var/local/ksubstrate/runtime/state/session.plan\" -f!",
+          "exitmenu": false,
+          "status": false
+        },
+        {
+          "name": "Run Substrate Demo",
+          "action": "./bin/demo.sh",
+          "if": "\"/mnt/us/kmc/kpm/packages/com.bd452.ksubstratedemo/app.sh\" -f",
+          "exitmenu": true,
+          "internal": "status Running Kindle Substrate demo"
+        }
+      ]
+    }
+  ]
+}

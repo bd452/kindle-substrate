@@ -22,8 +22,9 @@ package/include/ksubstrate.h
 package/diagnostics/com.bd452.ksubstrateprobe/
 ```
 
-The installed package creates Documents launchers for enabling and disabling the
-hooked session. See [`../../docs/kindle-substrate.md`](../../docs/kindle-substrate.md)
+The installed package creates a **Kindle Substrate** menu in KUAL for enabling,
+disabling, reframing, and viewing the session status. If the demo package is
+installed, the same menu includes **Run Substrate Demo**. See [`../../docs/kindle-substrate.md`](../../docs/kindle-substrate.md)
 for the full architecture and package contract.
 
 Build with the rest of the repo:

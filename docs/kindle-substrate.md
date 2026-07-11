@@ -65,7 +65,9 @@ package/
   tweaks/
 ```
 
-`install.sh` creates Documents launchers for enabling and disabling the session.
+`install.sh` installs a KUAL extension with enable, disable, reframe, status,
+and demo actions. It does not place executable shell scripts in Documents,
+where Kindle treats them as books rather than launchers.
 `app.sh` is the stable package-local control entry point:
 
 ```text

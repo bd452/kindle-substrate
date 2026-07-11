@@ -18,11 +18,14 @@ done
 mkdir -p "$ASSETS" "$TWEAKS"
 cp "$PKG/wrapper.sh" "$ASSETS/wrapper.sh"
 chmod 0555 "$ASSETS/wrapper.sh"
-for action in enable disable status reframe; do
-    cat > "/mnt/us/documents/com.bd452.ksubstrate-$action.sh" <<EOF
-#!/bin/sh
-exec "$PKG/app.sh" $action
-EOF
-    chmod 755 "/mnt/us/documents/com.bd452.ksubstrate-$action.sh"
-done
-echo "Kindle Substrate installed (disabled)."
+EXTENSION=/mnt/us/extensions/KindleSubstrate
+rm -rf "$EXTENSION"
+mkdir -p "$EXTENSION"
+cp -R "$PKG/kual/." "$EXTENSION/"
+chmod 755 "$EXTENSION/bin/control.sh" "$EXTENSION/bin/demo.sh"
+rm -f /mnt/us/documents/com.bd452.ksubstrate-enable.sh \
+    /mnt/us/documents/com.bd452.ksubstrate-disable.sh \
+    /mnt/us/documents/com.bd452.ksubstrate-status.sh \
+    /mnt/us/documents/com.bd452.ksubstrate-reframe.sh \
+    /mnt/us/documents/com.bd452.ksubstratedemo.sh
+echo "Kindle Substrate installed (disabled). Open KUAL to control it."

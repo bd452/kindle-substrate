@@ -193,7 +193,7 @@ rust/ksubstrated/src/
    mount-point directories.
 4. Assert the mount-point directories are not mounted and contain no files
    before installation writes into them.
-5. Add enable, disable, status, and reframe Documents launchers.
+5. Add KUAL actions for enable, disable, status, and reframe.
 6. During runtime package upgrade, use the old package's `app.sh disable` before
    replacing the daemon or wrapper asset.
 7. Abort upgrade if the active old session cannot be disabled; require a reboot
@@ -442,7 +442,7 @@ rust/ksubstrated/src/
 6. If re-arming fails, perform best-effort cleanup and restart the stock
    framework.
 7. Keep framework commands and health logic in `framework.rs`.
-8. Add a Reframe Kindle UI launcher and update user-facing messages.
+8. Add a Reframe KUAL action and update user-facing messages.
 
 ### Exit criteria
 
