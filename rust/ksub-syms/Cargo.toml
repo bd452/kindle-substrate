@@ -1,0 +1,13 @@
+[package]
+name = "ksub-syms"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Kindle Substrate symbol database helpers."
+
+[lib]
+name = "ksub_syms"
+path = "src/lib.rs"
+
+[dependencies]

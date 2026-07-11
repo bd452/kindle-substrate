@@ -1,0 +1,13 @@
+[package]
+name = "ksubstrate-probe-tweak"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Diagnostic tweak: logs every process it loads into, to verify LD_PRELOAD inheritance (A§6.4)."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+kindle-compat = { path = "../kindle-compat" }

@@ -1,0 +1,15 @@
+[package]
+name = "dobby-sys"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "FFI bindings + cross build for the vendored Dobby inline-hook engine."
+# Reserves the native `dobby` lib name so Cargo dedups the static link.
+links = "dobby"
+build = "build.rs"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]

@@ -1,0 +1,17 @@
+{
+  "manifest_version": 1,
+  "id": "com.bd452.ksubstrate",
+  "name": "Kindle Substrate",
+  "author": "Bryce",
+  "description": "Session-scoped native hooking runtime for jailbroken Kindles. Ships libksubstrate, the preload bootstrap, daemon, CLI, header, and tweak directory.",
+  "version": [
+    0,
+    1,
+    0
+  ],
+  "supported_platforms": [
+    "kindlehf",
+    "kindlepw2"
+  ],
+  "dependencies": []
+}

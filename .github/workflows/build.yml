@@ -1,0 +1,25 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: armv7-unknown-linux-gnueabihf,armv7-unknown-linux-gnueabi
+      - name: Host tests
+        run: cargo test --manifest-path rust/Cargo.toml --workspace
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y clang cmake libclang-dev
+      - name: Install koxtoolchain
+        run: ./scripts/setup-koxtoolchain.sh
+      - name: Build packages
+        run: ./build.sh

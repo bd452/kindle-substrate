@@ -1,0 +1,3 @@
+[submodule "apps/com.bd452.ksubstrate/vendor/Dobby"]
+	path = apps/com.bd452.ksubstrate/vendor/Dobby
+	url = https://github.com/jmpews/Dobby.git

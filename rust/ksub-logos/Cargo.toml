@@ -1,0 +1,13 @@
+[package]
+name = "ksub-logos"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Minimal Logos-style preprocessor for Kindle Substrate tweaks."
+
+[[bin]]
+name = "ksub-logos"
+path = "src/main.rs"
+
+[dependencies]

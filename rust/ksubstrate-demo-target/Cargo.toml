@@ -1,0 +1,14 @@
+[package]
+name = "ksubstrate-demo-target"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Demo target process for Kindle Substrate."
+
+[[bin]]
+name = "ksubstrate-demo-target"
+path = "src/main.rs"
+
+[dependencies]
+kindle-compat = { path = "../kindle-compat" }

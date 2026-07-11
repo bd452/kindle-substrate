@@ -1,0 +1,14 @@
+[package]
+name = "ksubstrate-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Device-side Kindle Substrate helper CLI."
+
+[[bin]]
+name = "ksubstrate"
+path = "src/main.rs"
+
+[dependencies]
+kindle-compat = { path = "../kindle-compat" }

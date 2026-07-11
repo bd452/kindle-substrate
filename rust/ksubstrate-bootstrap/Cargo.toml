@@ -1,0 +1,14 @@
+[package]
+name = "ksubstrate-bootstrap"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "LD_PRELOAD bootstrap that loads matching Kindle Substrate tweaks."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ksubstrate = { path = "../ksubstrate" }
+libc.workspace = true

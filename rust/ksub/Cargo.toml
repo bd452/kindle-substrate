@@ -1,0 +1,14 @@
+[package]
+name = "ksub"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Host-side Kindle Substrate toolchain CLI."
+
+[[bin]]
+name = "ksub"
+path = "src/main.rs"
+
+[dependencies]
+ksub-syms = { path = "../ksub-syms" }

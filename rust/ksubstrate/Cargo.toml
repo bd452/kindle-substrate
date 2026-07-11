@@ -1,0 +1,23 @@
+[package]
+name = "ksubstrate"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Kindle Substrate runtime ABI and hook registry."
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[features]
+default = []
+capi = []
+
+[dependencies]
+kindle-compat = { path = "../kindle-compat" }
+libc.workspace = true
+
+# The inline-hook backend is the vendored Dobby engine on-device; host builds use
+# the mock backend and never pull this in.
+[target.'cfg(target_arch = "arm")'.dependencies]
+dobby-sys = { path = "../dobby-sys" }

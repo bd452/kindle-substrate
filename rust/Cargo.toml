@@ -1,0 +1,32 @@
+[workspace]
+resolver = "2"
+members = [
+    "dobby-sys",
+    "kindle-compat",
+    "ksub",
+    "ksub-logos",
+    "ksub-syms",
+    "ksubstrate",
+    "ksubstrate-bootstrap",
+    "ksubstrate-cli",
+    "ksubstrate-demo-target",
+    "ksubstrate-probe-tweak",
+    "ksubstrate-sample-tweak",
+    "ksubstrated",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Bryce"]
+license = "MIT"
+
+[workspace.dependencies]
+libc = "0.2"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "unwind"

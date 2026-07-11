@@ -1,0 +1,26 @@
+{
+  "manifest_version": 1,
+  "id": "com.bd452.ksubstratedemo",
+  "name": "Kindle Substrate Demo",
+  "author": "Bryce",
+  "description": "Self-contained demo target and sample tweak for validating the Kindle Substrate runtime.",
+  "version": [
+    0,
+    1,
+    0
+  ],
+  "supported_platforms": [
+    "kindlehf",
+    "kindlepw2"
+  ],
+  "dependencies": [
+    {
+      "id": "com.bd452.ksubstrate",
+      "min": [
+        0,
+        1,
+        0
+      ]
+    }
+  ]
+}

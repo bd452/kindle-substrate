@@ -1,0 +1,15 @@
+# Cross-compilation linkers for the two Kindle platforms.
+#
+# The koxtoolchain gcc wrappers are found on PATH: the apps/*/build.sh scripts
+# prepend "$KOX_BASE/x-tools/<prefix>/bin" before invoking cargo (the same
+# trick apps/com.bd452.fbink/build.sh uses). Keeping bare tool names here (no
+# absolute paths) means this file is machine-independent and CI-friendly.
+#
+# kindlehf  -> armv7-unknown-linux-gnueabihf
+# kindlepw2 -> armv7-unknown-linux-gnueabi
+
+[target.armv7-unknown-linux-gnueabihf]
+linker = "arm-kindlehf-linux-gnueabihf-gcc"
+
+[target.armv7-unknown-linux-gnueabi]
+linker = "arm-kindlepw2-linux-gnueabi-gcc"

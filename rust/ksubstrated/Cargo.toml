@@ -1,0 +1,15 @@
+[package]
+name = "ksubstrated"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Kindle Substrate session daemon."
+
+[[bin]]
+name = "ksubstrated"
+path = "src/main.rs"
+
+[dependencies]
+kindle-compat = { path = "../kindle-compat" }
+libc.workspace = true

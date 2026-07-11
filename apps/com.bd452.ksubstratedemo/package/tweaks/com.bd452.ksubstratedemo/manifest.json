@@ -1,0 +1,11 @@
+{
+  "id": "com.bd452.ksubstratedemo.sample-tweak",
+  "name": "Kindle Substrate Sample Tweak",
+  "version": [
+    0,
+    1,
+    0
+  ],
+  "filter": "tweak.ksfilter",
+  "library": "tweak.so"
+}

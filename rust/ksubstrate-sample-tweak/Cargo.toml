@@ -1,0 +1,13 @@
+[package]
+name = "ksubstrate-sample-tweak"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Sample tweak for the Kindle Substrate demo target."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+kindle-compat = { path = "../kindle-compat" }
