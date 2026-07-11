@@ -1,9 +1,55 @@
+# macOS / Windows
 .DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.cursor/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Python (pack_kpkg.py and helpers)
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Rust
 /rust/target/
 /rust/target-kindle/
+**/*.rs.bk
+
+# Package build outputs
 apps/*/dist/
+*.kpkg
+
+# Staged install trees produced by app build.sh (sources stay tracked)
 apps/*/package/bin/
 apps/*/package/lib/
 apps/*/package/include/
 apps/*/package/tweaks/**/tweak.so
 apps/*/package/diagnostics/**/tweak.so
+
+# Firmware pulls and local reverse-engineering dumps (notes/ stay tracked)
+analysis/pulled/**
+
+# CMake / native build leftovers outside the Dobby submodule
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+*.o
+*.a
+*.dylib
+*.dSYM/
