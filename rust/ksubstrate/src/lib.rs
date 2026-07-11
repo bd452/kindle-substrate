@@ -200,15 +200,12 @@ pub fn hook_import(
 }
 
 pub fn log(message: &str) {
-    // Wrapped processes get `KSUBSTRATE_LOG` pointed at the daemon's log dir so
-    // engine/tweak output lands with the rest of the session logs. Standalone
-    // callers fall back to a world-writable temp path.
-    let path = std::env::var("KSUBSTRATE_LOG").unwrap_or_else(|_| "/tmp/ksubstrate.log".to_owned());
-    let _ = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .and_then(|mut file| writeln!(file, "{message}"));
+    // Runtime calls receive a state-tmpfs destination.  Do not create a
+    // fallback file when launched outside a session.
+    if let Ok(path) = std::env::var("KSUBSTRATE_LOG") {
+        let _ = OpenOptions::new().create(true).append(true).open(path)
+            .and_then(|mut file| writeln!(file, "{message}"));
+    } else { eprintln!("ksubstrate: {message}"); }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

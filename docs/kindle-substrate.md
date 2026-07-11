@@ -138,8 +138,7 @@ Design invariants:
 - Daemon lifetime is the session; no persistent session flag files.
 - Enable means restart the UI into a known home-screen state, not live PID
   injection. Both the `enable` launcher and the default KPM launch (`toggle`)
-  install session wrappers; `KSUBSTRATE_SYSTEM_WRAP=0` enables the daemon
-  without touching framework processes for a safe smoke test.
+  install session wrappers.
 - Hooks are installed at process exec by `LD_PRELOAD`, not by global
   `/etc/ld.so.preload`.
 - Default spawn roots are Kindle UI roots such as `pillow`, `appmgrd`, and the
@@ -149,7 +148,11 @@ Design invariants:
 
 ## Device Filesystem Contract
 
-The runtime package should treat its KPM package directory as the anchor:
+The runtime package treats its KPM package directory as the immutable asset
+anchor. Runtime state is strictly ephemeral: after KPM has installed the
+wrapper and tweak payloads, the daemon writes only beneath two independently
+verified tmpfs mounts. It never opens a system executable or its original alias
+for writing.
 
 ```text
 /mnt/us/kmc/kpm/packages/com.bd452.ksubstrate/
@@ -159,34 +162,24 @@ The runtime package should treat its KPM package directory as the anchor:
   lib/<platform>/libksubstrate.so
   lib/<platform>/libksubstrate-bootstrap.so
   include/ksubstrate.h
-  tweaks/                 # live tweaks (daemon + bootstrap scan here / /var/local/kmc/tweaks)
+  wrapper.sh               # generic immutable wrapper source
   diagnostics/            # opt-in tools (e.g. inheritance probe); not auto-loaded
 ```
 
-Session state lives under a daemon-owned volatile location, for example:
+Persistent tweak payloads live at `/var/local/kmc/tweaks/<id>/`; they are
+atomically installed only by KPM lifecycle hooks and are read-only to runtime
+code. Session state lives on two daemon-owned tmpfs mounts:
 
 ```text
-/var/local/kmc/ksubstrate/
-  run/
-    ksubstrated.pid     # monitor pid
-    disable             # disable marker observed by the monitor loop
-    wrappers.list       # exact set of wrapped roots, used to restore on cleanup
-    starts.log          # crash-loop guard start timestamps
-    session.env         # resolved session summary
-  log/
-    ksubstrated.log     # daemon log
-    tweaks.log          # engine/tweak log (wrappers set KSUBSTRATE_LOG here)
+/var/local/kmc/ksubstrate-runtime/
+  mounts/               # tmpfs (exec): original/usr/bin/pillow, etc.
+  state/                # distinct tmpfs (noexec): control.sock, journal, logs
 ```
 
-Installed tweaks live under the runtime package so they can be discovered by the
-bootstrap and packaged by KPM:
-
-```text
-/mnt/us/kmc/kpm/packages/com.bd452.ksubstrate/tweaks/<tweak-id>/
-  tweak.so
-  tweak.ksfilter
-  manifest.json
-```
+`app.sh reframe` reconciles the installed tweak set and restarts the Kindle
+framework; `reframe-if-active` is a no-op when disabled, so package operations
+never enable a session. KPM hooks use the deferred variant internally, allowing
+the control request to disconnect before reframe begins.
 
 The emergency USB sentinel is:
 
@@ -254,7 +247,7 @@ entire region under consideration is verified before Dobby patches.
    to a stable path under the session dir, then the original path is shadowed by
    a wrapper that re-execs under `LD_PRELOAD`. Nothing on the rootfs is modified;
    a reboot drops the mounts (A§14.1). The wrapped set is recorded to
-   `run/wrappers.list`. If any wrap fails, every root wrapped so far is rolled
+   the tmpfs journal. If any wrap fails, every root wrapped so far is rolled
    back so a UI root is never left missing.
 3. Restarts the framework into the home UI.
 4. Guards against crash loops by watching UI-process health (falling edges of
@@ -262,7 +255,7 @@ entire region under consideration is verified before Dobby patches.
    `CRASH_THRESHOLD` (3) deaths land within `CRASH_WINDOW_SECS` (120s), the
    session returns to stock instead of re-arming.
 5. On disable or exit, unmounts the wrappers and restarts stock UI, restoring
-   exactly the roots in `run/wrappers.list`. A reboot is still clean even if the
+   exactly the roots in the tmpfs journal. A reboot is still clean even if the
    manifest is missing, because the mounts are volatile.
 
 ## Toolchain Relationship
@@ -314,7 +307,7 @@ prologue signatures because firmware-specific RVAs can drift.
 ## Recovery Ladder
 
 1. Disable launcher: daemon unmounts wrappers and restarts stock UI, restoring
-   exactly the roots recorded in `run/wrappers.list`.
+   exactly the roots recorded in the tmpfs journal.
 2. USB sentinel: create `/mnt/us/DISABLE_KSUBSTRATE`, then reboot. The bootstrap
    checks it first and loads no tweaks.
 3. Crash-loop / health guard: three UI-process deaths (or monitor restarts)

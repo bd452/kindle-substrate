@@ -342,19 +342,34 @@ set -e
 PKG="$(CDPATH= cd "$(dirname "$0")" && pwd)"
 ID="$(basename "$PKG")"
 DEST="/var/local/kmc/tweaks/$ID"
+ROOT="/var/local/kmc/tweaks"
 if [ -f /lib/ld-linux-armhf.so.3 ]; then PLAT=kindlehf; else PLAT=kindlepw2; fi
 test -f "$PKG/lib/$PLAT/tweak.so"
-mkdir -p "$DEST"
-cp "$PKG/lib/$PLAT/tweak.so" "$DEST/tweak.so"
-cp "$PKG/tweak/tweak.ksfilter" "$DEST/tweak.ksfilter"
-cp "$PKG/tweak/manifest.json" "$DEST/manifest.json"
-echo "Installed $ID. Re-enable Kindle Substrate to load it."
+mkdir -p "$ROOT"
+STAGE="$ROOT/.$ID.staging.$$"
+OLD="$ROOT/.$ID.retired.$$"
+mkdir "$STAGE"
+cp "$PKG/lib/$PLAT/tweak.so" "$STAGE/tweak.so"
+cp "$PKG/tweak/tweak.ksfilter" "$STAGE/tweak.ksfilter"
+cp "$PKG/tweak/manifest.json" "$STAGE/manifest.json"
+test -s "$STAGE/tweak.so" && test -s "$STAGE/tweak.ksfilter" && test -s "$STAGE/manifest.json"
+rollback() {
+    if [ -e "$OLD" ] && [ ! -e "$DEST" ]; then mv "$OLD" "$DEST" || true; fi
+    rm -rf "$STAGE"
+}
+trap rollback EXIT HUP INT TERM
+if [ -e "$DEST" ]; then mv "$DEST" "$OLD"; fi
+mv "$STAGE" "$DEST"
+trap - EXIT HUP INT TERM
+rm -rf "$OLD"
+"/mnt/us/kmc/kpm/packages/com.bd452.ksubstrate/app.sh" reframe-if-active-deferred || true
+echo "Installed $ID. An active session will reframe after this hook disconnects."
 "#
     .to_owned()
 }
 
 fn uninstall_script() -> String {
-    "#!/bin/sh\nset -e\n[ \"${1:-}\" = upgrade ] && exit 0\nPKG=\"$(CDPATH= cd \"$(dirname \"$0\")\" && pwd)\"\nID=\"$(basename \"$PKG\")\"\nrm -rf \"/var/local/kmc/tweaks/$ID\"\n".to_owned()
+    "#!/bin/sh\nset -e\n[ \"${1:-}\" = upgrade ] && exit 0\nPKG=\"$(CDPATH= cd \"$(dirname \"$0\")\" && pwd)\"\nID=\"$(basename \"$PKG\")\"\nROOT=/var/local/kmc/tweaks\nDEST=\"$ROOT/$ID\"\nRETIRED=\"$ROOT/.$ID.retired.$$\"\nif [ -e \"$DEST\" ]; then mv \"$DEST\" \"$RETIRED\"; fi\n\"/mnt/us/kmc/kpm/packages/com.bd452.ksubstrate/app.sh\" reframe-if-active-deferred || true\nrm -rf \"$RETIRED\"\n".to_owned()
 }
 
 fn tweak_readme(name: &str) -> String {
@@ -363,7 +378,7 @@ fn tweak_readme(name: &str) -> String {
 
 fn tweak_manifest_json(name: &str) -> String {
     format!(
-        "{{\n  \"id\": \"com.example.{name}\",\n  \"name\": \"{name}\",\n  \"version\": [0, 1, 0],\n  \"filter\": \"tweak.ksfilter\",\n  \"library\": \"tweak.so\"\n}}\n"
+        "{{\n  \"id\": \"com.example.{name}\",\n  \"name\": \"{name}\",\n  \"version\": [0, 1, 0],\n  \"filter\": \"tweak.ksfilter\",\n  \"library\": \"tweak.so\",\n  \"initialization\": \"constructor\"\n}}\n"
     )
 }
 

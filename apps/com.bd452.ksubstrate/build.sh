@@ -74,6 +74,7 @@ build_platform() {
 build_platform kindlehf
 build_platform kindlepw2
 
+
 cp "$RUST_DIR/ksubstrate/include/ksubstrate.h" "$APP_ROOT/package/include/ksubstrate.h"
 install -m 644 "$RUST_DIR/ksubstrate-probe-tweak/tweak.ksfilter" \
     "$APP_ROOT/package/diagnostics/com.bd452.ksubstrateprobe/tweak.ksfilter"

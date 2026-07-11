@@ -92,7 +92,12 @@ ABIs exist, then writes `dist/*.kpkg`.
 
 The generated KPM package has an explicit runtime dependency. On install, it
 selects the device ABI and copies the library, filter, and tweak manifest to
-`/var/local/kmc/tweaks/<package-id>/`. On uninstall, it removes that registered
+`/var/local/kmc/tweaks/<package-id>/`. Install stages payloads in a hidden
+same-filesystem directory and atomically renames them into the visible registry;
+uninstall first renames the active directory away. Both operations defer
+`reframe-if-active-deferred`, which queues work only after the package hook
+disconnects and never enables a disabled runtime. Hidden staging and retired
+directories are excluded from the runtime registry. On uninstall, it removes that registered
 tweak. Disable and re-enable Kindle Substrate after installing, upgrading, or
 removing a tweak so the UI session is restarted with the new set.
 

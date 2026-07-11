@@ -16,11 +16,6 @@ if [ ! -x "$DAEMON" ]; then
     exit 1
 fi
 
-# Wrap Kindle UI roots by default so both `enable` and the default KPM launch
-# (`toggle`) arm the session. Set KSUBSTRATE_SYSTEM_WRAP=0 to enable the daemon
-# without touching framework processes (safe smoke test).
-export KSUBSTRATE_SYSTEM_WRAP="${KSUBSTRATE_SYSTEM_WRAP:-1}"
-
 case "${1:-toggle}" in
     enable)
         exec "$DAEMON" --enable
@@ -31,11 +26,20 @@ case "${1:-toggle}" in
     status)
         exec "$DAEMON" --status
         ;;
+    reframe)
+        exec "$DAEMON" --reframe
+        ;;
+    reframe-if-active)
+        exec "$DAEMON" --reframe-if-active
+        ;;
+    reframe-if-active-deferred)
+        exec "$DAEMON" --reframe-if-active-deferred
+        ;;
     toggle)
         exec "$DAEMON" --toggle
         ;;
     *)
-        echo "usage: $0 [enable|disable|status|toggle]" >&2
+        echo "usage: $0 [enable|disable|status|reframe|reframe-if-active|reframe-if-active-deferred|toggle]" >&2
         exit 64
         ;;
 esac

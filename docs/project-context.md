@@ -64,7 +64,8 @@ most dependable recovery tools.
 - Symbol lookup through `dlsym` and Dobby's symbol resolver.
 - Firmware-private address resolution through module load base plus RVA.
 - A preload bootstrap that checks the USB disable sentinel, matches
-  `.ksfilter` files, loads tweaks, and calls an optional `ksubstrate_init`.
+  `.ksfilter` files, and loads tweaks using one manifest-selected initialization
+  contract: the default constructor, or an explicit `ksubstrate_init` entrypoint.
 - `ksubstrated`, which owns session wrappers, framework restart, cleanup,
   process blacklisting, and crash-loop monitoring.
 - A device CLI for launching a process with the runtime environment.
