@@ -11,6 +11,9 @@ use std::path::{Path, PathBuf};
 #[cfg(target_os = "linux")]
 const MNT_DETACH: libc::c_int = 2;
 const MS_RDONLY: libc::c_ulong = 1;
+const MS_NOSUID: libc::c_ulong = 2;
+const MS_NODEV: libc::c_ulong = 4;
+const MS_NOEXEC: libc::c_ulong = 8;
 const MS_REMOUNT: libc::c_ulong = 32;
 const MS_BIND: libc::c_ulong = 4096;
 
@@ -34,8 +37,8 @@ fn mount_call(_: *const libc::c_char, _: *const libc::c_char, _: *const libc::c_
 pub fn mount_runtime_tmpfs(mounts: &MountTmpfs, state: &StateTmpfs) -> Result<(), String> {
     ensure_empty_unmounted(mounts.path())?;
     ensure_empty_unmounted(state.path())?;
-    mount_tmpfs(mounts.path(), "nodev,nosuid,exec,mode=0700,size=4m")?;
-    if let Err(error) = mount_tmpfs(state.path(), "nodev,nosuid,noexec,mode=0700,size=4m") {
+    mount_tmpfs(mounts.path(), false)?;
+    if let Err(error) = mount_tmpfs(state.path(), true) {
         let _ = umount(mounts.path());
         return Err(error);
     }
@@ -50,7 +53,7 @@ pub fn mount_runtime_tmpfs(mounts: &MountTmpfs, state: &StateTmpfs) -> Result<()
 pub fn remount_fresh_mounts_tmpfs(mounts: &MountTmpfs) -> Result<(), String> {
     if is_mountpoint(mounts.path())? { umount(mounts.path())?; }
     ensure_empty_unmounted(mounts.path())?;
-    mount_tmpfs(mounts.path(), "nodev,nosuid,exec,mode=0700,size=4m")?;
+    mount_tmpfs(mounts.path(), false)?;
     verify_tmpfs(mounts.path(), false)
 }
 
@@ -63,12 +66,20 @@ fn ensure_empty_unmounted(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn mount_tmpfs(target: &Path, options: &str) -> Result<(), String> {
+fn tmpfs_mount_spec(require_noexec: bool) -> (libc::c_ulong, &'static str) {
+    let mut flags = MS_NODEV | MS_NOSUID;
+    if require_noexec { flags |= MS_NOEXEC; }
+    // VFS options belong in mount flags. tmpfs receives only filesystem data.
+    (flags, "mode=0700,size=4m")
+}
+
+fn mount_tmpfs(target: &Path, require_noexec: bool) -> Result<(), String> {
     let source = CString::new("tmpfs").unwrap();
     let fs_type = CString::new("tmpfs").unwrap();
     let target = c(target)?;
-    let options = CString::new(options).unwrap();
-    mount_call(source.as_ptr(), target.as_ptr(), fs_type.as_ptr(), 0, options.as_ptr().cast())
+    let (flags, data) = tmpfs_mount_spec(require_noexec);
+    let data = CString::new(data).unwrap();
+    mount_call(source.as_ptr(), target.as_ptr(), fs_type.as_ptr(), flags, data.as_ptr().cast())
 }
 
 pub fn umount(path: &Path) -> Result<(), String> {
@@ -174,5 +185,16 @@ mod tests {
         let entry = parse_mountinfo_line("24 23 0:22 / /run rw,nosuid,nodev - tmpfs tmpfs rw,size=1m").unwrap();
         assert_eq!(entry.point, Path::new("/run"));
         assert!(split_options(&entry.options).contains(&"nodev"));
+    }
+
+    #[test]
+    fn tmpfs_vfs_options_use_mount_flags() {
+        let (mounts_flags, mounts_data) = tmpfs_mount_spec(false);
+        assert_eq!(mounts_flags, MS_NODEV | MS_NOSUID);
+        assert_eq!(mounts_data, "mode=0700,size=4m");
+
+        let (state_flags, state_data) = tmpfs_mount_spec(true);
+        assert_eq!(state_flags, MS_NODEV | MS_NOSUID | MS_NOEXEC);
+        assert_eq!(state_data, "mode=0700,size=4m");
     }
 }
