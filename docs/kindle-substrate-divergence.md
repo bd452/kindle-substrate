@@ -13,6 +13,8 @@ Reference documents:
 - **Original plan** — retained by reference in the source repository history
   (todo IDs cited as `plan:<id>`).
 - **Current doc** — [kindle-substrate.md](kindle-substrate.md).
+- **Forward plan** — [architecture-strategy.md](architecture-strategy.md)
+  (milestones M0–M3; prefer this for what to build next).
 
 Legend for **Direction**:
 

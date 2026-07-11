@@ -5,6 +5,10 @@ ABI, bootstrap, daemon, device CLI, demo target, sample tweak, host toolchain,
 and KPM package sources. `bd452/kinstaller-repo` consumes this project as a
 submodule and remains the package distribution surface.
 
+For the forward roadmap (milestones, decisions, exit gates), see
+[architecture-strategy.md](architecture-strategy.md). This document is the
+as-built contract.
+
 ## Repository Boundary
 
 ```text
@@ -21,7 +25,7 @@ kindle-substrate/
   apps/com.bd452.ksubstrate/   # KPM package source for runtime artifacts
   apps/com.bd452.ksubstratedemo/
   analysis/                    # firmware acquisition and symbol work
-  docs/                        # architecture and implementation audit
+  docs/                        # architecture, strategy, and implementation audit
 ```
 
 The Rust workspace and KPM package sources are independently buildable here.
@@ -266,11 +270,17 @@ entire region under consideration is verified before Dobby patches.
 The host-side `ksub` toolchain lives in the Rust workspace and produces
 artifacts that match the package contract above.
 
+See [build-and-publish.md](build-and-publish.md) for the reproducible downstream
+KPM publishing flow and the standalone third-party tweak authoring flow.
+
 Command status (this repo is an MVP; not every command is a finished pipeline):
 
-- `ksub new tweak|library|tool` — implemented (scaffolds a project).
-- `ksub build --platform kindlehf|kindlepw2` — implemented (cross-compiles).
-- `ksub package` — implemented (runs the app `build.sh` scripts).
+- `ksub new tweak` — implemented (scaffolds a buildable KPM dependency consumer).
+- `ksub new library|tool` — placeholder README scaffolds only.
+- `ksub build --platform kindlehf|kindlepw2` — implemented for scaffolded tweaks
+  (cross-compiles and stages the selected ABI).
+- `ksub package` — implemented for scaffolded tweaks and this repository's two
+  built-in packages.
 - `ksub deploy [--dest <path>]` — copies built `.kpkg` artifacts to a local or
   USB-mounted destination; for SSH transports, copy the printed artifacts with
   your own tooling.

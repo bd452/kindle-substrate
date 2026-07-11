@@ -132,7 +132,12 @@ This is an experimental architecture implementation, not a production-ready
 hooking platform. The outer system is substantial and buildable, but several
 load-bearing behaviors still require correction or device evidence.
 
-Highest-priority work:
+The forward plan — north star, layer ownership, milestones M0–M3 with binary
+exit gates, design decisions, and target contracts — lives in
+[architecture-strategy.md](architecture-strategy.md). Prefer that document when
+deciding what to implement next.
+
+Highest-priority work (also expanded in the strategy doc):
 
 1. Validate Dobby inline hooks on real `kindlehf` and `kindlepw2` devices,
    including non-trivial ARM/Thumb prologues and unhooking.

@@ -11,7 +11,7 @@ daemon, host-side tweak tooling, and KPM runtime/demo packages.
 - `apps/com.bd452.ksubstrate` - runtime KPM package
 - `apps/com.bd452.ksubstratedemo` - self-contained validation package
 - `apps/com.bd452.ksubstrate/vendor/Dobby` - pinned inline-hook engine
-- `docs/` - architecture and implementation audit
+- `docs/` - architecture, strategy, and implementation audit
 - `analysis/` - firmware acquisition and symbol-analysis work
 
 ## Build
@@ -31,11 +31,17 @@ This repository is the source of truth for the runtime and toolchain;
 `kinstaller-repo` can consume a pinned commit as a submodule and publish those
 artifacts in its package index.
 
+The supported runtime publishing and third-party tweak authoring workflows are
+documented in [`docs/build-and-publish.md`](docs/build-and-publish.md).
+
 ## Status
 
 The implementation is experimental. Cross-build and host tests are available,
 but inline hooking, GOT rewriting, framework wrappers, and recovery still
 require validation across the supported Kindle firmware/device matrix.
+
+Forward plan (milestones M0–M3, layer ownership, exit gates):
+[`docs/architecture-strategy.md`](docs/architecture-strategy.md).
 
 The implementation was extracted from `bd452/kinstaller-repo` at commit
 `b4a1c65`.

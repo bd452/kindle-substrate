@@ -109,6 +109,16 @@ fn toggle() -> Result<(), String> {
 fn status() -> Result<(), String> {
     if is_running() {
         println!("enabled");
+        for root in read_wrapped() {
+            match session_paths(Path::new(&root)) {
+                Ok(paths) => {
+                    println!("root={root}");
+                    println!("original={}", paths.original.display());
+                    println!("wrapper={}", paths.wrapper.display());
+                }
+                Err(error) => println!("root={root} (invalid session path: {error})"),
+            }
+        }
     } else {
         println!("clean");
     }
@@ -275,39 +285,68 @@ fn wrap_root(session: &Session, root: &str) -> Result<bool, String> {
     if !path.exists() {
         return Ok(false);
     }
-    let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-        return Ok(false);
-    };
-    fs::create_dir_all(ORIG_DIR).map_err(|error| format!("create {ORIG_DIR}: {error}"))?;
-    fs::create_dir_all(WRAPPERS_DIR).map_err(|error| format!("create {WRAPPERS_DIR}: {error}"))?;
-    let orig_mount = Path::new(ORIG_DIR).join(name);
-    let wrapper = Path::new(WRAPPERS_DIR).join(name);
-    if wrapper.exists() {
+    let paths = session_paths(path)?;
+    fs::create_dir_all(paths.original.parent().expect("original path has a parent"))
+        .map_err(|error| format!("create original parent: {error}"))?;
+    fs::create_dir_all(paths.wrapper.parent().expect("wrapper path has a parent"))
+        .map_err(|error| format!("create wrapper parent: {error}"))?;
+    if paths.wrapper.exists() {
         // Already wrapped this session.
         return Ok(false);
     }
 
     // Bind the real binary to a stable path the wrapper can exec after shadowing.
-    fs::write(&orig_mount, b"").map_err(|error| format!("create bind target {}: {error}", orig_mount.display()))?;
-    bind_mount(path, &orig_mount)?;
+    fs::write(&paths.original, b"")
+        .map_err(|error| format!("create bind target {}: {error}", paths.original.display()))?;
+    bind_mount(path, &paths.original)?;
 
-    let script = wrapper_script(session, &orig_mount);
-    if let Err(error) = fs::write(&wrapper, &script) {
-        let _ = umount(&orig_mount);
-        let _ = fs::remove_file(&orig_mount);
-        return Err(format!("write wrapper {}: {error}", wrapper.display()));
+    let script = wrapper_script(session, &paths.original);
+    if let Err(error) = fs::write(&paths.wrapper, &script) {
+        let _ = umount(&paths.original);
+        let _ = fs::remove_file(&paths.original);
+        return Err(format!(
+            "write wrapper {}: {error}",
+            paths.wrapper.display()
+        ));
     }
-    let _ = Command::new("chmod").arg("+x").arg(&wrapper).status();
+    let _ = Command::new("chmod").arg("+x").arg(&paths.wrapper).status();
 
     // Shadow the original path with the wrapper.
-    if let Err(error) = bind_mount(&wrapper, path) {
-        let _ = umount(&orig_mount);
-        let _ = fs::remove_file(&orig_mount);
-        let _ = fs::remove_file(&wrapper);
+    if let Err(error) = bind_mount(&paths.wrapper, path) {
+        let _ = umount(&paths.original);
+        let _ = fs::remove_file(&paths.original);
+        let _ = fs::remove_file(&paths.wrapper);
         return Err(error);
     }
     log(&format!("wrapped {root} (bind mount)"));
     Ok(true)
+}
+
+struct SessionPaths {
+    original: PathBuf,
+    wrapper: PathBuf,
+}
+
+/// Map an absolute executable path into a unique, readable session layout. The
+/// full path is mirrored under each root, so `/usr/bin/pillow` and
+/// `/usr/sbin/pillow` can never collide.
+fn session_paths(root: &Path) -> Result<SessionPaths, String> {
+    let relative = root
+        .strip_prefix("/")
+        .map_err(|_| format!("spawn root must be absolute: {}", root.display()))?;
+    if relative
+        .components()
+        .any(|component| matches!(component, std::path::Component::ParentDir))
+    {
+        return Err(format!(
+            "spawn root must not contain `..`: {}",
+            root.display()
+        ));
+    }
+    Ok(SessionPaths {
+        original: Path::new(ORIG_DIR).join(relative),
+        wrapper: Path::new(WRAPPERS_DIR).join(relative),
+    })
 }
 
 fn wrapper_script(session: &Session, exec_target: &Path) -> String {
@@ -350,16 +389,17 @@ fn umount(path: &Path) -> Result<(), String> {
 fn restore_roots(roots: &[String]) {
     for root in roots {
         let path = Path::new(root);
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+        let Ok(paths) = session_paths(path) else {
+            log(&format!(
+                "skipping invalid wrapped root during cleanup: {root}"
+            ));
             continue;
         };
-        let orig_mount = Path::new(ORIG_DIR).join(name);
-        let wrapper = Path::new(WRAPPERS_DIR).join(name);
         // Unshadow the original path, then release the bind to the real binary.
         let _ = umount(path);
-        let _ = umount(&orig_mount);
-        let _ = fs::remove_file(&wrapper);
-        let _ = fs::remove_file(&orig_mount);
+        let _ = umount(&paths.original);
+        let _ = fs::remove_file(&paths.wrapper);
+        let _ = fs::remove_file(&paths.original);
         log(&format!("restored {root}"));
     }
 }
@@ -636,5 +676,32 @@ mod tests {
         let names = filter_root_names(&dir);
         assert_eq!(names, vec!["cooltool".to_owned()]);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn session_paths_mirror_full_root_path_without_basename_collisions() {
+        let user_bin = session_paths(Path::new("/usr/bin/pillow")).unwrap();
+        let user_sbin = session_paths(Path::new("/usr/sbin/pillow")).unwrap();
+
+        assert_eq!(
+            user_bin.original,
+            Path::new(ORIG_DIR).join("usr/bin/pillow")
+        );
+        assert_eq!(
+            user_bin.wrapper,
+            Path::new(WRAPPERS_DIR).join("usr/bin/pillow")
+        );
+        assert_eq!(
+            user_sbin.original,
+            Path::new(ORIG_DIR).join("usr/sbin/pillow")
+        );
+        assert_ne!(user_bin.original, user_sbin.original);
+        assert_ne!(user_bin.wrapper, user_sbin.wrapper);
+    }
+
+    #[test]
+    fn session_paths_reject_relative_and_parent_roots() {
+        assert!(session_paths(Path::new("pillow")).is_err());
+        assert!(session_paths(Path::new("/usr/bin/../pillow")).is_err());
     }
 }
