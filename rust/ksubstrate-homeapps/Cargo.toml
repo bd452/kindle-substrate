@@ -1,0 +1,14 @@
+[package]
+name = "ksubstrate-homeapps"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Manifest-backed Kindle Home app registry and launcher bridge."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+kindle-compat = { path = "../kindle-compat" }
+ksubstrate-targets = { path = "../ksubstrate-targets" }

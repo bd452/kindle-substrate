@@ -3,11 +3,33 @@
   "id": "com.bd452.ksubstrate",
   "name": "Kindle Substrate",
   "author": "Bryce",
-  "description": "Session-scoped native hooking runtime for jailbroken Kindles. Ships libksubstrate, the preload bootstrap, daemon, CLI, header, and tweak directory.",
+  "description": "Session-scoped native hooking runtime for jailbroken Kindles. Ships libksubstrate, the preload bootstrap, daemon, CLI, header, and a fileless Home demo.",
+  "kindle_home": [
+    {
+      "id": "test",
+      "name": "Kindle Substrate Test",
+      "subtitle": "Fileless KPM Home app",
+      "icon": "assets/home-demo.pgm",
+      "executable": "app.sh",
+      "arguments": [
+        "home-demo"
+      ]
+    },
+    {
+      "id": "status",
+      "name": "Kindle Substrate Status",
+      "subtitle": "Show runtime state",
+      "icon": "assets/home-demo.pgm",
+      "executable": "app.sh",
+      "arguments": [
+        "home-status"
+      ]
+    }
+  ],
   "version": [
     0,
     1,
-    5
+    6
   ],
   "supported_platforms": [
     "kindlehf",

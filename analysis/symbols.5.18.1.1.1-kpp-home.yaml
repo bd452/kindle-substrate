@@ -1,0 +1,34 @@
+# Verified against /app/bin/KPPMainAppV2 from Kindle firmware 5.18.1.1.1.
+# The binary is Thumb-2; RVAs are ELF symbol values and prologues are raw bytes.
+firmware: "5.18.1.1.1-kpp-home"
+symbols:
+  - name: "_ZN10KPPHomeApp14CardAggregator17getAggregateCardsEv"
+    image: "KPPMainAppV2"
+    rva: 0x11265b0
+    prologue: "644a654b2de9f04f"
+    source: "objdump-dynsym"
+  - name: "_ZN10KPPHomeApp16DataProviderUtil22convertJSONToCardModelEN5utils4json13JsonContainerE"
+    image: "KPPMainAppV2"
+    rva: 0x1139a50
+    prologue: "a84aa94b2de9f04f"
+    source: "objdump-dynsym"
+  - name: "_ZN10KPPHomeApp19LibraryDataProvider20getCardsFromProviderEv"
+    image: "KPPMainAppV2"
+    rva: 0x113618c
+    prologue: "834a844b2de9f04f"
+    source: "objdump-dynsym"
+  - name: "_ZN10KPPHomeApp18HomeUIDataProvider8getCardsEv"
+    image: "KPPMainAppV2"
+    rva: 0x113846c
+    prologue: "684a694b2de9f04f"
+    source: "objdump-dynsym"
+  - name: "_ZN10KPPHomeApp16HomeOrchestrator24getOrderedCardsForHomeUIEv"
+    image: "KPPMainAppV2"
+    rva: 0x113df5c
+    prologue: "314a324b2de9f041"
+    source: "objdump-dynsym"
+  - name: "_ZN13KPPNavigation16NavigationModule10navigateToESsN5utils4json13JsonContainerE"
+    image: "KPPMainAppV2"
+    rva: 0x11e2d34
+    prologue: "f0b50b46274c87b0"
+    source: "objdump-dynsym"

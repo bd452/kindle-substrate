@@ -173,7 +173,7 @@ code. Session state lives on two daemon-owned tmpfs mounts:
 
 ```text
 /var/local/ksubstrate/runtime/
-  mounts/               # tmpfs (exec): original/usr/bin/pillow, etc.
+  mounts/               # tmpfs (exec): original/usr/bin/pillowd, etc.
   state/                # distinct tmpfs (noexec): control.sock, journal, logs
 ```
 

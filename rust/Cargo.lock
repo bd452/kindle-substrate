@@ -70,6 +70,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ksubstrate-homeapps"
+version = "0.1.0"
+dependencies = [
+ "kindle-compat",
+ "ksubstrate-targets",
+]
+
+[[package]]
 name = "ksubstrate-probe-tweak"
 version = "0.1.0"
 dependencies = [

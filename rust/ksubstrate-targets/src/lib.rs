@@ -67,6 +67,22 @@ pub struct SessionPlan {
     pub targets: Vec<PlanTarget>,
 }
 
+/// A package-declared Home entry.  These are intentionally separate from a
+/// Substrate tweak manifest: a package can be visible on Home without adding
+/// executable launchers to Kindle Documents.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HomeApp {
+    pub package_id: String,
+    pub app_id: String,
+    pub synthetic_id: String,
+    pub name: String,
+    pub subtitle: Option<String>,
+    pub icon: PathBuf,
+    pub executable: PathBuf,
+    pub arguments: Vec<String>,
+    pub working_directory: PathBuf,
+}
+
 pub fn platform() -> &'static str {
     if Path::new("/lib/ld-linux-armhf.so.3").exists() {
         "kindlehf"
@@ -79,6 +95,128 @@ pub fn valid_id(value: &str) -> bool {
         && value
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+}
+
+/// Enumerate valid `kindle_home` declarations without writing to either the
+/// package tree or Kindle's content catalog. Invalid declarations are skipped
+/// individually so a bad third-party package cannot prevent Home from loading.
+pub fn discover_home_apps() -> Result<Vec<HomeApp>, String> {
+    discover_home_apps_at(Path::new(PACKAGES_ROOT), platform())
+}
+
+pub fn discover_home_apps_at(root: &Path, platform: &str) -> Result<Vec<HomeApp>, String> {
+    let metadata = match fs::symlink_metadata(root) {
+        Ok(value) => value,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(format!("stat KPM package root: {error}")),
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err("KPM package root is not a real directory".to_owned());
+    }
+    let mut apps = Vec::new();
+    for entry in fs::read_dir(root).map_err(|error| format!("read KPM package root: {error}"))? {
+        let Ok(entry) = entry else { continue };
+        let directory_id = entry.file_name().to_string_lossy().into_owned();
+        if !valid_id(&directory_id) { continue; }
+        let package = entry.path();
+        let Ok(metadata) = fs::symlink_metadata(&package) else { continue };
+        if metadata.file_type().is_symlink() || !metadata.is_dir() { continue; }
+        let manifest_path = package.join("manifest.json");
+        if regular_file(&manifest_path).is_err() { continue; }
+        let Ok(text) = fs::read_to_string(manifest_path) else { continue; };
+        if let Ok(package_apps) = parse_home_apps(&text, &package, &directory_id, platform) {
+            apps.extend(package_apps);
+        }
+    }
+    apps.sort_by_key(|app| (app.name.to_lowercase(), app.package_id.clone(), app.app_id.clone()));
+    Ok(apps)
+}
+
+fn parse_home_apps(input: &str, package: &Path, directory_id: &str, platform: &str) -> Result<Vec<HomeApp>, String> {
+    let value: Value = serde_json::from_str(input).map_err(|error| format!("invalid package JSON: {error}"))?;
+    let object = value.as_object().ok_or_else(|| "package manifest must be a JSON object".to_owned())?;
+    let package_id = required_string(object, "id")?;
+    if package_id != directory_id || !valid_id(&package_id) { return Err("package id does not match package directory".to_owned()); }
+    if let Some(supported) = object.get("supported_platforms") {
+        let supported = supported.as_array().ok_or_else(|| "supported_platforms must be a string array".to_owned())?;
+        if !supported
+            .iter()
+            .any(|value| value.as_str() == Some("kindleany") || value.as_str() == Some(platform))
+        {
+            return Err("package does not support this Kindle platform".to_owned());
+        }
+    }
+    let homes = object.get("kindle_home").and_then(Value::as_array).ok_or_else(|| "kindle_home must be an array".to_owned())?;
+    let mut id_counts = BTreeMap::<String, usize>::new();
+    for home in homes {
+        if let Some(app_id) = home.as_object().and_then(|home| home.get("id")).and_then(Value::as_str) {
+            *id_counts.entry(app_id.to_owned()).or_default() += 1;
+        }
+    }
+    Ok(homes
+        .iter()
+        .filter_map(|home| {
+            let home = home.as_object()?;
+            let app_id = required_string(home, "id").ok()?;
+            if !valid_id(&app_id) || id_counts.get(&app_id) != Some(&1) { return None; }
+            parse_home_app(home, package, &package_id, app_id, platform).ok()
+        })
+        .collect())
+}
+
+fn parse_home_app(home: &serde_json::Map<String, Value>, package: &Path, package_id: &str, app_id: String, platform: &str) -> Result<HomeApp, String> {
+    let name = required_string(home, "name")?;
+    if name.is_empty() { return Err("kindle_home name is empty".to_owned()); }
+    let subtitle = home.get("subtitle").map(|value| value.as_str().map(str::to_owned).ok_or_else(|| "kindle_home subtitle must be a string".to_owned())).transpose()?;
+    let icon = home_relative_file(package, &required_string(home, "icon")?, platform, "icon")?;
+    let executable = home_relative_executable(package, &required_string(home, "executable")?, platform)?;
+    let working_directory = match home.get("working_directory") {
+        None => package.to_path_buf(),
+        Some(value) => home_relative_directory(package, value.as_str().ok_or_else(|| "kindle_home working_directory must be a string".to_owned())?, platform)?,
+    };
+    let arguments = match home.get("arguments") {
+        None => Vec::new(),
+        Some(value) => value.as_array().ok_or_else(|| "kindle_home arguments must be a string array".to_owned())?.iter().map(|value| value.as_str().map(str::to_owned).ok_or_else(|| "kindle_home arguments must be a string array".to_owned())).collect::<Result<Vec<_>, _>>()?,
+    };
+    Ok(HomeApp { synthetic_id: format!("kpm-app://{package_id}/{app_id}"), package_id: package_id.to_owned(), app_id, name, subtitle, icon, executable, arguments, working_directory })
+}
+
+fn expand_home_path(value: &str, platform: &str) -> Result<String, String> {
+    let value = value.replace("{platform}", platform);
+    if value.contains('{') || !safe_relative(&value) { return Err("unsafe kindle_home relative path".to_owned()); }
+    Ok(value)
+}
+
+fn home_relative_path(package: &Path, value: &str, platform: &str, kind: &str) -> Result<PathBuf, String> {
+    let relative = expand_home_path(value, platform)?;
+    let mut path = package.to_path_buf();
+    for component in Path::new(&relative).components() {
+        let Component::Normal(component) = component else { return Err(format!("unsafe kindle_home {kind} path")); };
+        path.push(component);
+        let metadata = fs::symlink_metadata(&path).map_err(|error| format!("stat kindle_home {kind}: {error}"))?;
+        if metadata.file_type().is_symlink() { return Err(format!("kindle_home {kind} contains a symlink")); }
+    }
+    Ok(path)
+}
+
+fn home_relative_file(package: &Path, value: &str, platform: &str, kind: &str) -> Result<PathBuf, String> {
+    let path = home_relative_path(package, value, platform, kind)?;
+    regular_file(&path)?;
+    Ok(path)
+}
+
+fn home_relative_executable(package: &Path, value: &str, platform: &str) -> Result<PathBuf, String> {
+    let path = home_relative_file(package, value, platform, "executable")?;
+    regular_executable(&path)?;
+    reject_blacklisted(&path)?;
+    Ok(path)
+}
+
+fn home_relative_directory(package: &Path, value: &str, platform: &str) -> Result<PathBuf, String> {
+    let path = home_relative_path(package, value, platform, "working directory")?;
+    let metadata = fs::symlink_metadata(&path).map_err(|error| format!("stat home app working directory: {error}"))?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() { return Err("kindle_home working directory is not a real directory".to_owned()); }
+    Ok(path)
 }
 pub fn regular_file(path: &Path) -> Result<(), String> {
     let m = fs::symlink_metadata(path).map_err(|e| format!("stat {}: {e}", path.display()))?;
@@ -231,7 +369,9 @@ pub fn resolve(spec: &TargetSpec, platform: &str) -> Result<ResolvedTarget, Stri
 }
 fn builtin(name: &str) -> Result<ResolvedTarget, String> {
     let (path, restart) = match name {
-        "pillow" => ("/usr/bin/pillow", RestartClass::Framework),
+        // `pillow` is the stable public target name. Modern firmware exposes
+        // the framework root as the pillowd executable.
+        "pillow" => ("/usr/bin/pillowd", RestartClass::Framework),
         "appmgrd" => ("/usr/bin/appmgrd", RestartClass::Framework),
         _ => return Err(format!("unknown built-in target: {name}")),
     };
@@ -602,7 +742,7 @@ mod tests {
             targets: vec![PlanTarget {
                 target: ResolvedTarget {
                     id: "builtin:pillow".to_owned(),
-                    executable: "/usr/bin/pillow".into(),
+                    executable: "/usr/bin/pillowd".into(),
                     restart: RestartClass::Framework,
                     package: None,
                 },
@@ -632,5 +772,129 @@ mod tests {
     #[test]
     fn session_plan_requires_current_version() {
         assert!(decode_plan("generation\t1\nplatform\tkindlepw2\n").is_err());
+    }
+
+    #[test]
+    fn discovers_valid_fileless_home_app() {
+        let root = std::env::temp_dir().join(format!("ksub-home-apps-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let package = root.join("com.example.chess");
+        fs::create_dir_all(package.join("assets")).unwrap();
+        fs::write(package.join("assets/cover.pgm"), b"P2\n1 1\n1\n0\n").unwrap();
+        fs::write(package.join("app.sh"), b"#!/bin/sh\nexit 0\n").unwrap();
+        let mut permissions = fs::metadata(package.join("app.sh")).unwrap().permissions();
+        use std::os::unix::fs::PermissionsExt;
+        permissions.set_mode(0o755);
+        fs::set_permissions(package.join("app.sh"), permissions).unwrap();
+        fs::write(package.join("manifest.json"), r#"{
+          "id":"com.example.chess",
+          "kindle_home":[{"id":"play","name":"Chess","icon":"assets/cover.pgm","executable":"app.sh","arguments":["--quick"]}]
+        }"#).unwrap();
+        let apps = discover_home_apps_at(&root, "kindlehf").unwrap();
+        assert_eq!(apps.len(), 1);
+        assert_eq!(apps[0].synthetic_id, "kpm-app://com.example.chess/play");
+        assert_eq!(apps[0].package_id, "com.example.chess");
+        assert_eq!(apps[0].app_id, "play");
+        assert_eq!(apps[0].arguments, vec!["--quick"]);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn omits_home_app_for_another_platform() {
+        let root = std::env::temp_dir().join(format!("ksub-home-platform-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let package = root.join("com.example.hfonly");
+        fs::create_dir_all(package.join("assets")).unwrap();
+        fs::write(package.join("assets/icon"), b"x").unwrap();
+        fs::write(package.join("run"), b"#!/bin/sh\n").unwrap();
+        let mut permissions = fs::metadata(package.join("run")).unwrap().permissions();
+        use std::os::unix::fs::PermissionsExt;
+        permissions.set_mode(0o755);
+        fs::set_permissions(package.join("run"), permissions).unwrap();
+        fs::write(package.join("manifest.json"), r#"{
+          "id":"com.example.hfonly", "supported_platforms":["kindlehf"],
+          "kindle_home":[{"id":"main","name":"HF","icon":"assets/icon","executable":"run"}]
+        }"#).unwrap();
+        assert!(discover_home_apps_at(&root, "kindlepw2").unwrap().is_empty());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn bundled_runtime_home_demo_is_discoverable() {
+        let package = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../apps/com.bd452.ksubstrate/package")
+            .canonicalize()
+            .unwrap();
+        let manifest = fs::read_to_string(package.join("manifest.json")).unwrap();
+        let apps = parse_home_apps(
+            &manifest,
+            &package,
+            "com.bd452.ksubstrate",
+            "kindlehf",
+        )
+        .unwrap();
+
+        assert_eq!(apps.len(), 2);
+        assert_eq!(apps[0].synthetic_id, "kpm-app://com.bd452.ksubstrate/test");
+        assert_eq!(apps[0].name, "Kindle Substrate Test");
+        assert_eq!(apps[0].arguments, vec!["home-demo"]);
+        assert_eq!(apps[0].executable, package.join("app.sh"));
+        assert_eq!(apps[0].icon, package.join("assets/home-demo.pgm"));
+        assert_eq!(apps[1].synthetic_id, "kpm-app://com.bd452.ksubstrate/status");
+        assert_eq!(apps[1].arguments, vec!["home-status"]);
+    }
+
+    #[test]
+    fn keeps_valid_siblings_and_omits_duplicate_app_ids() {
+        let root = std::env::temp_dir().join(format!("ksub-home-multiple-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let package = root.join("com.example.tools");
+        fs::create_dir_all(package.join("assets")).unwrap();
+        fs::write(package.join("assets/icon"), b"x").unwrap();
+        fs::write(package.join("run"), b"#!/bin/sh\n").unwrap();
+        let mut permissions = fs::metadata(package.join("run")).unwrap().permissions();
+        use std::os::unix::fs::PermissionsExt;
+        permissions.set_mode(0o755);
+        fs::set_permissions(package.join("run"), permissions).unwrap();
+        fs::write(package.join("manifest.json"), r#"{
+          "id":"com.example.tools",
+          "kindle_home":[
+            {"id":"good","name":"Good","icon":"assets/icon","executable":"run"},
+            {"id":"broken","name":"Broken","icon":"assets/missing","executable":"run"},
+            {"id":"duplicate","name":"Duplicate A","icon":"assets/icon","executable":"run"},
+            {"id":"duplicate","name":"Duplicate B","icon":"assets/icon","executable":"run"}
+          ]
+        }"#).unwrap();
+
+        let apps = discover_home_apps_at(&root, "kindlehf").unwrap();
+        assert_eq!(apps.len(), 1);
+        assert_eq!(apps[0].synthetic_id, "kpm-app://com.example.tools/good");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn rejects_symlinked_home_path_components() {
+        let root = std::env::temp_dir().join(format!("ksub-home-symlink-{}", std::process::id()));
+        let outside = std::env::temp_dir().join(format!("ksub-home-outside-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&outside);
+        let package = root.join("com.example.escape");
+        fs::create_dir_all(&package).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(outside.join("icon"), b"x").unwrap();
+        std::os::unix::fs::symlink(&outside, package.join("assets")).unwrap();
+        fs::write(package.join("run"), b"#!/bin/sh\n").unwrap();
+        let mut permissions = fs::metadata(package.join("run")).unwrap().permissions();
+        use std::os::unix::fs::PermissionsExt;
+        permissions.set_mode(0o755);
+        fs::set_permissions(package.join("run"), permissions).unwrap();
+        fs::write(package.join("manifest.json"), r#"{
+          "id":"com.example.escape",
+          "kindle_home":[{"id":"escape","name":"Escape","icon":"assets/icon","executable":"run"}]
+        }"#).unwrap();
+
+        assert!(discover_home_apps_at(&root, "kindlehf").unwrap().is_empty());
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&outside);
     }
 }

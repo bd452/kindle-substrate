@@ -10,6 +10,7 @@ members = [
     "ksubstrate-bootstrap",
     "ksubstrate-cli",
     "ksubstrate-demo-target",
+    "ksubstrate-homeapps",
     "ksubstrate-probe-tweak",
     "ksubstrate-sample-tweak",
     "ksubstrate-targets",

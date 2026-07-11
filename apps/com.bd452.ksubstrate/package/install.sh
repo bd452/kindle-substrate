@@ -23,6 +23,20 @@ rm -rf "$EXTENSION"
 mkdir -p "$EXTENSION"
 cp -R "$PKG/kual/." "$EXTENSION/"
 chmod 755 "$EXTENSION/bin/control.sh" "$EXTENSION/bin/demo.sh"
+
+# First-party registry backing synthetic Home entries. It reads KPM manifests,
+# but never creates app launchers in Documents or writes Kindle's catalog.
+HOME_APPS="$TWEAKS/com.bd452.ksubstrate.homeapps"
+HOME_STAGE="${HOME_APPS}.staging.$$"
+rm -rf "$HOME_STAGE"
+mkdir -p "$HOME_STAGE"
+if [ -f /lib/ld-linux-armhf.so.3 ]; then PLAT=kindlehf; else PLAT=kindlepw2; fi
+cp "$PKG/homeapps/$PLAT/tweak.so" "$HOME_STAGE/tweak.so"
+cp "$PKG/homeapps/manifest.json" "$HOME_STAGE/manifest.json"
+test -s "$HOME_STAGE/tweak.so" && test -s "$HOME_STAGE/manifest.json"
+rm -rf "$HOME_APPS"
+mv "$HOME_STAGE" "$HOME_APPS"
+
 rm -f /mnt/us/documents/com.bd452.ksubstrate-enable.sh \
     /mnt/us/documents/com.bd452.ksubstrate-disable.sh \
     /mnt/us/documents/com.bd452.ksubstrate-status.sh \

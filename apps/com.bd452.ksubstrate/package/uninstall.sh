@@ -12,4 +12,5 @@ rm -f /mnt/us/documents/com.bd452.ksubstrate-enable.sh \
     /mnt/us/documents/com.bd452.ksubstrate-reframe.sh \
     /mnt/us/documents/com.bd452.ksubstratedemo.sh
 rm -f /var/local/ksubstrate/assets/wrapper.sh
+rm -rf /var/local/ksubstrate/tweaks/com.bd452.ksubstrate.homeapps
 # Third-party payloads under /var/local/ksubstrate/tweaks deliberately survive.

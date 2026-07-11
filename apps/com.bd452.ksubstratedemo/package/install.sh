@@ -41,4 +41,4 @@ if ! /mnt/us/kmc/kpm/packages/com.bd452.ksubstrate/app.sh post-package-change; t
 fi
 rm -rf "$OLD"
 rm -f /mnt/us/documents/com.bd452.ksubstratedemo.sh
-echo "Kindle Substrate Demo installed and registered. Open KUAL, then Kindle Substrate, to run it."
+echo "Kindle Substrate Demo installed and registered. KUAL can launch it."
