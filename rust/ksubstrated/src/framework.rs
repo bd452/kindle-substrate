@@ -24,7 +24,7 @@ pub fn restart_stock() -> Result<(), String> { restart_framework_to_home() }
 pub fn wait_for_framework_health(timeout: Duration) -> Result<(), String> {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
-        if ["pillow", "appmgrd"].iter().any(|name| process_alive(name)) { return Ok(()); }
+        if ["pillowd", "appmgrd"].iter().any(|name| process_alive(name)) { return Ok(()); }
         thread::sleep(Duration::from_millis(250));
     }
     Err("framework did not expose a healthy root before timeout".to_owned())

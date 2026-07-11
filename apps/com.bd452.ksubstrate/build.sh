@@ -30,7 +30,8 @@ mkdir -p "$APP_ROOT/package/lib/kindlehf" "$APP_ROOT/package/lib/kindlepw2" \
     "$APP_ROOT/package/bin/kindlehf" "$APP_ROOT/package/bin/kindlepw2" \
     "$APP_ROOT/package/include" "$APP_ROOT/package/tweaks" \
     "$APP_ROOT/package/diagnostics/com.bd452.ksubstrateprobe/lib/kindlehf" \
-    "$APP_ROOT/package/diagnostics/com.bd452.ksubstrateprobe/lib/kindlepw2"
+    "$APP_ROOT/package/diagnostics/com.bd452.ksubstrateprobe/lib/kindlepw2" \
+    "$APP_ROOT/package/homeapps/kindlehf" "$APP_ROOT/package/homeapps/kindlepw2"
 rm -f "$APP_ROOT/package/diagnostics/com.bd452.ksubstrateprobe/tweak.so"
 
 build_platform() {
@@ -47,7 +48,7 @@ build_platform() {
     env CROSS_TC="$cross_tc" PATH="$tool_bin:$PATH" RUSTFLAGS="$rustflags" \
         "$linker_env=$tool_bin/${cross_tc}-gcc" \
         cargo build --manifest-path "$RUST_DIR/Cargo.toml" --release --target "$rust_target" \
-        -p ksubstrate -p ksubstrate-bootstrap -p ksubstrate-cli -p ksubstrated
+        -p ksubstrate -p ksubstrate-bootstrap -p ksubstrate-cli -p ksubstrated -p ksubstrate-homeapps
 
     target_dir="${CARGO_TARGET_DIR:-$RUST_DIR/target}"
     release_dir="$target_dir/${rust_target}/release"
@@ -60,6 +61,8 @@ build_platform() {
         "$APP_ROOT/package/bin/${platform}/ksubstrate"
     install -m 755 "$release_dir/ksubstrated" \
         "$APP_ROOT/package/bin/${platform}/ksubstrated"
+    install -m 644 "$release_dir/libksubstrate_homeapps.so" \
+        "$APP_ROOT/package/homeapps/${platform}/tweak.so"
 
     # Probe needs the just-staged runtime lib (KSUBSTRATE_LIB_DIR → dynamic link).
     echo "==> Building inheritance probe for $platform"
@@ -76,6 +79,7 @@ build_platform() {
 
     validate_kox_elf_loader "$platform" "$lib_dir/libksubstrate.so"
     validate_kox_elf_loader "$platform" "$lib_dir/libksubstrate-bootstrap.so"
+    validate_kox_elf_loader "$platform" "$APP_ROOT/package/homeapps/${platform}/tweak.so"
     validate_kox_elf_loader "$platform" \
         "$APP_ROOT/package/diagnostics/com.bd452.ksubstrateprobe/lib/${platform}/tweak.so"
 }

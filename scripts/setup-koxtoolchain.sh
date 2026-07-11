@@ -22,8 +22,13 @@ download() {
         return 0
     fi
     local url="https://github.com/KindleModding/koxtoolchain/releases/latest/download/${name}.tar.gz"
+    local archive="$KOX_BASE/.${name}.tar.gz.$$"
     echo "==> Downloading $name"
-    curl -fsSL "$url" | tar -xzf - -C "$KOX_BASE"
+    rm -f "$archive"
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 \
+        --connect-timeout 30 --max-time 600 -o "$archive" "$url"
+    tar -xzf "$archive" -C "$KOX_BASE"
+    rm -f "$archive"
 }
 
 download kindlehf

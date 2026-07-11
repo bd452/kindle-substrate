@@ -38,6 +38,54 @@ The resulting repository manifest must retain the demo dependency on
 `com.bd452.ksubstrate`. Publishing is performed by the downstream repository's
 GitHub Pages workflow; this repository does not publish a package index.
 
+## Fileless Home apps
+
+Any KPM package can opt into one or more Kindle Home entries without placing
+launchers in `/mnt/us/documents`. Add a `kindle_home` array to its package
+manifest. Every entry has an ID unique within that package:
+
+```json
+{
+  "id": "com.example.chess",
+  "kindle_home": [
+    {
+      "id": "play",
+      "name": "Chess",
+      "subtitle": "Board game",
+      "icon": "assets/cover.pgm",
+      "executable": "app.sh",
+      "arguments": ["--quick"]
+    },
+    {
+      "id": "puzzles",
+      "name": "Chess Puzzles",
+      "icon": "assets/puzzles.pgm",
+      "executable": "app.sh",
+      "arguments": ["--puzzles"]
+    }
+  ]
+}
+```
+
+All declared paths must be package-relative regular files or directories.
+No path component may be a symlink. `executable` must be executable;
+`{platform}` may appear in a path and expands to `kindlehf` or `kindlepw2`.
+Invalid declarations are omitted individually, so one bad entry does not hide
+valid siblings. Duplicate or invalid app IDs are omitted. The runtime assigns
+each entry a stable
+`kpm-app://<package-id>/<app-id>` ID, reads the icon from its package location,
+and starts the executable directly with the declared arguments—never through a
+shell.
+
+The runtime package installs the `com.bd452.ksubstrate.homeapps` registry tweak
+into the persistent Substrate registry. It exposes a C bridge for a
+firmware-specific Home adapter to enumerate, render, and activate those
+synthetic entries. The bridge deliberately does not create files in Documents
+or modify Kindle's content database. Package lifecycle hooks refresh an active
+session automatically; the KUAL **Reframe Active Session** action is the manual
+recovery path. Until a firmware-specific Home adapter is installed, KUAL remains
+the supported way to launch the package.
+
 ## Create and build a tweak package
 
 Build the runtime once so its per-platform SDK libraries are staged, then build
@@ -104,11 +152,18 @@ removing a tweak so the UI session is restarted with the new set.
 
 ## Device validation
 
-Install `com.bd452.ksubstrate` and then `com.bd452.ksubstratedemo` through KPM.
-The dependency resolver must install or require the runtime first. Run the demo
-launcher and capture its output and `/tmp/ksubstrate-demo-result`; the expected
-hooked value is `42`, with `tweaks.log` showing both the inline hook and the
-`write` import hook.
+Installing `com.bd452.ksubstrate` through KPM also installs two fileless Home
+entries: **Kindle Substrate Test** and **Kindle Substrate Status**. Neither has a
+matching file under `/mnt/us/documents`. Test dispatches `app.sh home-demo`,
+shows a success notification, and writes diagnostic details to
+`/mnt/us/ksubstrate-home-demo-result.txt`. Status dispatches `app.sh home-status`
+and shows the current runtime state.
+
+For generic target-hook validation, install `com.bd452.ksubstratedemo` through
+KPM. The dependency resolver must install or require the runtime first. Run the
+demo launcher and capture its output and `/mnt/us/ksubstrate-demo-result.txt`;
+the expected hooked value is `42`, with `tweaks.log` showing both the inline
+hook and the `write` import hook.
 
 For framework-session validation, first create `/mnt/us/DISABLE_KSUBSTRATE` and
 confirm the sentinel prevents loading. Remove it, use the Enable Tweaks launcher,

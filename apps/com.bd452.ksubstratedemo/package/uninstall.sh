@@ -17,3 +17,4 @@ if ! /mnt/us/kmc/kpm/packages/com.bd452.ksubstrate/app.sh post-package-change; t
 fi
 rm -rf "$RETIRED"
 rm -f /mnt/us/documents/com.bd452.ksubstratedemo.sh
+echo "Kindle Substrate Demo removed. The Home-app registry refreshes when Substrate is active."

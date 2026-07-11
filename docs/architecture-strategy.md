@@ -266,7 +266,7 @@ model: PW5
 abi: kindlehf
 firmware: "5.16.2"
 spawn_roots:
-  - /usr/bin/pillow
+  - /usr/bin/pillowd # public target name: pillow
   - /usr/bin/appmgrd
 blacklist: [powerd, sshd, dbus-daemon, otav3, otaupd, mmcqd, wpa_supplicant, dhcpd]
 build_ids:
