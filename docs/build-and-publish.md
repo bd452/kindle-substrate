@@ -9,7 +9,7 @@ that depends on that runtime.
 Kindle Substrate builds two KPM artifacts in dependency order:
 
 1. `com.bd452.ksubstrate` provides the runtime, bootstrap, daemon, CLI, and SDK.
-2. `com.bd452.ksubstratedemo` depends on `com.bd452.ksubstrate >= 0.1.2` and
+2. `com.bd452.ksubstratedemo` depends on `com.bd452.ksubstrate >= 0.1.3` and
    validates inline and import hooks in a self-contained target.
 
 From a recursive clone of this repository, run:

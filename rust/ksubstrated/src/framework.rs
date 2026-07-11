@@ -10,14 +10,16 @@ fn run(program: &str, args: &[&str]) -> Result<(), String> {
     if status.success() { Ok(()) } else { Err(format!("{program} exited with {status}")) }
 }
 
-pub fn restart_hooked() -> Result<(), String> {
+fn restart_framework_to_home() -> Result<(), String> {
     run("initctl", &["restart", "framework"])?;
     run("lipc-set-prop", &["com.lab126.appmgrd", "start", "app://com.lab126.booklet.home"])
 }
 
+pub fn restart_hooked() -> Result<(), String> { restart_framework_to_home() }
+
 pub fn stop_framework() -> Result<(), String> { run("initctl", &["stop", "framework"]) }
 
-pub fn restart_stock() -> Result<(), String> { run("initctl", &["restart", "framework"]) }
+pub fn restart_stock() -> Result<(), String> { restart_framework_to_home() }
 
 pub fn wait_for_framework_health(timeout: Duration) -> Result<(), String> {
     let deadline = Instant::now() + timeout;

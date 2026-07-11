@@ -67,16 +67,25 @@ fn recover() -> Result<(), String> {
 
 fn apply(old: Option<SessionPlan>) -> Result<(), String> {
     let mounts = MountTmpfs::new(); let state = StateTmpfs::new();
+    // Validate the next session before mounting tmpfs or touching the UI. An
+    // empty registry is a normal disabled state, not a framework failure.
+    let generation = old.as_ref().map(|plan| plan.generation + 1).unwrap_or(1);
+    let plan = tweaks::build_plan(&mounts, generation)?;
+    if plan.targets.is_empty() {
+        return match old {
+            Some(old) => teardown(&old, true),
+            None => Err("no enabled Substrate targets are installed".to_owned()),
+        };
+    }
     let old_framework = old.as_ref().is_some_and(needs_framework);
+    let new_framework = needs_framework(&plan);
     let mut installed = Vec::new();
+    let mut framework_touched = false;
     let result = (|| {
-        if old_framework { framework::stop_framework()?; }
+        if old_framework { framework::stop_framework()?; framework_touched = true; }
         if let Some(plan) = &old { teardown_mounts(plan)?; let _ = fs::remove_file(state.path().join(PLAN)); }
         if mounts::is_mountpoint(mounts.path())? { mounts::remount_fresh_mounts_tmpfs(&mounts)?; } else { mounts::mount_runtime_tmpfs(&mounts, &state)?; fs::create_dir(state.path().join("log")).map_err(|e| format!("create state log: {e}"))?; }
-        let generation = old.as_ref().map(|plan| plan.generation + 1).unwrap_or(1);
-        let plan = tweaks::build_plan(&mounts, generation)?;
-        let new_framework = needs_framework(&plan);
-        if new_framework && !old_framework { framework::stop_framework()?; }
+        if new_framework && !old_framework { framework::stop_framework()?; framework_touched = true; }
         let journal = Journal::new(&state); journal.clear()?;
         let wrapper = WrapperAsset::installed()?;
         for target in &plan.targets { installed.push(target.clone()); install_target(&journal, &mounts, &wrapper, target)?; }
@@ -87,7 +96,7 @@ fn apply(old: Option<SessionPlan>) -> Result<(), String> {
     if let Err(error) = result {
         let _ = unmount_targets(&installed);
         let _ = fs::remove_file(state.path().join(PENDING)); let _ = fs::remove_file(state.path().join(PLAN));
-        let _ = framework::restart_stock();
+        if framework_touched { let _ = framework::restart_stock(); }
         if mounts::is_mountpoint(mounts.path()).unwrap_or(false) { let _ = mounts::umount(mounts.path()); }
         if mounts::is_mountpoint(state.path()).unwrap_or(false) { let _ = mounts::umount(state.path()); }
         return Err(error);

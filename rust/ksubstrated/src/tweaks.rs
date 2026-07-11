@@ -57,9 +57,6 @@ pub fn build_plan(mounts: &MountTmpfs, generation: u64) -> Result<SessionPlan, S
             });
         }
     }
-    if plan_targets.is_empty() {
-        return Err("validated registry contains no targets".to_owned());
-    }
     Ok(SessionPlan {
         generation,
         platform: platform.to_owned(),
