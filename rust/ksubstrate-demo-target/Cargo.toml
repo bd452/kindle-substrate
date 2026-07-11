@@ -12,3 +12,4 @@ path = "src/main.rs"
 
 [dependencies]
 kindle-compat = { path = "../kindle-compat" }
+libc.workspace = true

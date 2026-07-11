@@ -1,6 +1,6 @@
 use std::fs;
 #[cfg(ksubstrate_dynamic)]
-use std::os::raw::{c_char, c_void};
+use std::{ffi::CString, os::raw::c_void};
 
 /// The function the sample tweak inline-hooks. Exported so the tweak can resolve
 /// it by name at runtime; `#[inline(never)]` keeps it a real, patchable symbol.
@@ -24,7 +24,14 @@ fn main() {
 fn read_value() -> i32 {
     unsafe {
         let symbol = b"compute\0";
-        let resolved = kh_find_symbol(std::ptr::null(), symbol.as_ptr().cast());
+        let runtime_symbol = CString::new("kh_find_symbol").unwrap();
+        let runtime = libc::dlsym(libc::RTLD_DEFAULT, runtime_symbol.as_ptr());
+        if runtime.is_null() {
+            return compute();
+        }
+        let find_symbol: extern "C" fn(*const c_void, *const c_void) -> *mut c_void =
+            std::mem::transmute(runtime);
+        let resolved = find_symbol(std::ptr::null(), symbol.as_ptr().cast());
         if resolved.is_null() {
             return compute();
         }
@@ -36,9 +43,4 @@ fn read_value() -> i32 {
 #[cfg(not(ksubstrate_dynamic))]
 fn read_value() -> i32 {
     compute()
-}
-
-#[cfg(ksubstrate_dynamic)]
-extern "C" {
-    fn kh_find_symbol(image: *const c_char, name: *const c_char) -> *mut c_void;
 }
