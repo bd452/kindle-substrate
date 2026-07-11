@@ -4,7 +4,8 @@ use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Component, Path, PathBuf};
 
-pub const TWEAKS_ROOT: &str = "/var/local/kmc/tweaks";
+/// Persistent registry owned by Substrate, outside KPM's immutable namespace.
+pub const TWEAKS_ROOT: &str = "/var/local/ksubstrate/tweaks";
 pub const PACKAGES_ROOT: &str = "/mnt/us/kmc/kpm/packages";
 
 #[derive(Clone, Debug, PartialEq, Eq)]

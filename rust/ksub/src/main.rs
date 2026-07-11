@@ -337,8 +337,8 @@ fn install_script() -> String {
 set -e
 PKG="$(CDPATH= cd "$(dirname "$0")" && pwd)"
 ID="$(basename "$PKG")"
-DEST="/var/local/kmc/tweaks/$ID"
-ROOT="/var/local/kmc/tweaks"
+DEST="/var/local/ksubstrate/tweaks/$ID"
+ROOT="/var/local/ksubstrate/tweaks"
 if [ -f /lib/ld-linux-armhf.so.3 ]; then PLAT=kindlehf; else PLAT=kindlepw2; fi
 test -f "$PKG/lib/$PLAT/tweak.so"
 mkdir -p "$ROOT"
@@ -368,7 +368,7 @@ echo "Installed $ID. Active sessions reconciled successfully."
 }
 
 fn uninstall_script() -> String {
-    "#!/bin/sh\nset -e\n[ \"${1:-}\" = upgrade ] && exit 0\nPKG=\"$(CDPATH= cd \"$(dirname \"$0\")\" && pwd)\"\nID=\"$(basename \"$PKG\")\"\nROOT=/var/local/kmc/tweaks\nDEST=\"$ROOT/$ID\"\nRETIRED=\"$ROOT/.$ID.retired.$$\"\nif [ -e \"$DEST\" ]; then mv \"$DEST\" \"$RETIRED\"; fi\nif ! \"/mnt/us/kmc/kpm/packages/com.bd452.ksubstrate/app.sh\" post-package-change; then [ -e \"$RETIRED\" ] && mv \"$RETIRED\" \"$DEST\"; exit 1; fi\nrm -rf \"$RETIRED\"\n".to_owned()
+    "#!/bin/sh\nset -e\n[ \"${1:-}\" = upgrade ] && exit 0\nPKG=\"$(CDPATH= cd \"$(dirname \"$0\")\" && pwd)\"\nID=\"$(basename \"$PKG\")\"\nROOT=/var/local/ksubstrate/tweaks\nDEST=\"$ROOT/$ID\"\nRETIRED=\"$ROOT/.$ID.retired.$$\"\nif [ -e \"$DEST\" ]; then mv \"$DEST\" \"$RETIRED\"; fi\nif ! \"/mnt/us/kmc/kpm/packages/com.bd452.ksubstrate/app.sh\" post-package-change; then [ -e \"$RETIRED\" ] && mv \"$RETIRED\" \"$DEST\"; exit 1; fi\nrm -rf \"$RETIRED\"\n".to_owned()
 }
 
 fn tweak_readme(name: &str) -> String {
@@ -495,6 +495,12 @@ mod tests {
         assert!(manifest.contains("\"id\": \"com.example.my-tweak\""));
         assert!(project.join("package/install.sh").is_file());
         assert!(project.join("package/uninstall.sh").is_file());
+        assert!(fs::read_to_string(project.join("package/install.sh"))
+            .unwrap()
+            .contains("/var/local/ksubstrate/tweaks"));
+        assert!(fs::read_to_string(project.join("package/uninstall.sh"))
+            .unwrap()
+            .contains("/var/local/ksubstrate/tweaks"));
         assert!(!project.join("tweak.ksfilter").exists());
         assert!(!project.join("package/tweak/tweak.ksfilter").exists());
         let tweak_manifest = fs::read_to_string(project.join("package/tweak/manifest.json")).unwrap();

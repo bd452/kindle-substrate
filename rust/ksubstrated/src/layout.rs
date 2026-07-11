@@ -5,10 +5,12 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Component, Path, PathBuf};
 use ksubstrate_targets::ResolvedTarget;
 
-pub const RUNTIME_ROOT: &str = "/var/local/kmc/ksubstrate-runtime";
-pub const MOUNTS_ROOT: &str = "/var/local/kmc/ksubstrate-runtime/mounts";
-pub const STATE_ROOT: &str = "/var/local/kmc/ksubstrate-runtime/state";
-pub const WRAPPER_ASSET: &str = "/var/local/kmc/ksubstrate-assets/wrapper.sh";
+/// Substrate-owned root. Do not place runtime state under /var/local/kmc:
+/// KPM recursively marks that namespace immutable after its own installation.
+pub const RUNTIME_ROOT: &str = "/var/local/ksubstrate/runtime";
+pub const MOUNTS_ROOT: &str = "/var/local/ksubstrate/runtime/mounts";
+pub const STATE_ROOT: &str = "/var/local/ksubstrate/runtime/state";
+pub const WRAPPER_ASSET: &str = "/var/local/ksubstrate/assets/wrapper.sh";
 
 #[derive(Debug, Clone, PartialEq, Eq)] pub struct SystemExecutable(PathBuf);
 #[derive(Debug, Clone, PartialEq, Eq)] pub struct OriginalAlias(PathBuf);

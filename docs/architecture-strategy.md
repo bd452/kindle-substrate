@@ -157,7 +157,7 @@ spawn quirks — still without expanding the SDK story.
 - [ ] Mount journal (`src`, `dst`, `stage`) written before each mount
 - [ ] `SIGTERM` / `SIGINT` / `SIGHUP` → `cleanup_session`; `atexit` backup
 - [ ] Firmware profiles YAML: model → verified spawn roots
-- [ ] Converge tweaks dir to `/var/local/kmc/tweaks` (+ package symlink if needed)
+- [x] Keep the tweak registry at `/var/local/ksubstrate/tweaks`, outside KPM's immutable namespace
 - [ ] Bootstrap: once-flag; `catch_unwind` around `dlopen` / init
 
 **Exit:** Host GOT fixtures green; daemon unit tests for journal restore; re-run

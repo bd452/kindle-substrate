@@ -11,7 +11,7 @@ use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const STATE_PLAN: &str = "/var/local/kmc/ksubstrate-runtime/state/session.plan";
+const STATE_PLAN: &str = "/var/local/ksubstrate/runtime/state/session.plan";
 
 fn main() {
     kindle_compat::ensure_linked();
@@ -206,7 +206,7 @@ fn exec_preloaded(
     } else {
         command.env(
             "KSUBSTRATE_LOG",
-            "/var/local/kmc/ksubstrate-runtime/state/log/tweaks.log",
+            "/var/local/ksubstrate/runtime/state/log/tweaks.log",
         );
     }
     #[cfg(unix)]

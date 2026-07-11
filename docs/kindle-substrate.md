@@ -164,12 +164,13 @@ for writing.
   diagnostics/            # opt-in tools (e.g. inheritance probe); not auto-loaded
 ```
 
-Persistent tweak payloads live at `/var/local/kmc/tweaks/<id>/`; they are
+Persistent Substrate data lives outside KPM's immutable `/var/local/kmc`
+namespace. Tweak payloads live at `/var/local/ksubstrate/tweaks/<id>/`; they are
 atomically installed only by KPM lifecycle hooks and are read-only to runtime
 code. Session state lives on two daemon-owned tmpfs mounts:
 
 ```text
-/var/local/kmc/ksubstrate-runtime/
+/var/local/ksubstrate/runtime/
   mounts/               # tmpfs (exec): original/usr/bin/pillow, etc.
   state/                # distinct tmpfs (noexec): control.sock, journal, logs
 ```

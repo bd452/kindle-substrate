@@ -24,7 +24,7 @@ without rebooting or enabling a disabled session.
    verified tmpfs mount points.
 4. Persistent tweak payloads are modified only by KPM install, upgrade, and
    uninstall hooks.
-5. Runtime code treats `/var/local/kmc/tweaks` as read-only.
+5. Runtime code treats `/var/local/ksubstrate/tweaks` as read-only.
 6. Runtime wrapper assets are installed once and treated as read-only.
 7. Cleanup is useful for disable and reframe, but hard-reboot recovery does not
    depend on cleanup, a journal, or a running daemon.
@@ -46,16 +46,16 @@ Persistent files written only by KPM lifecycle hooks:
   lib/<platform>/libksubstrate.so
   lib/<platform>/libksubstrate-bootstrap.so
 
-/var/local/kmc/ksubstrate-assets/
+/var/local/ksubstrate/assets/
   wrapper.sh
 
-/var/local/kmc/tweaks/
+/var/local/ksubstrate/tweaks/
   <tweak-id>/
     tweak.so
     tweak.ksfilter
     manifest.json
 
-/var/local/kmc/ksubstrate-runtime/
+/var/local/ksubstrate/runtime/
   mounts/  # permanently empty mount point outside an active session
   state/   # permanently empty mount point outside an active session
 ```
@@ -63,11 +63,11 @@ Persistent files written only by KPM lifecycle hooks:
 Runtime-only views mounted by the daemon:
 
 ```text
-/var/local/kmc/ksubstrate-runtime/mounts/  # tmpfs, exec
+/var/local/ksubstrate/runtime/mounts/  # tmpfs, exec
   original/usr/bin/pillow
   original/usr/bin/appmgrd
 
-/var/local/kmc/ksubstrate-runtime/state/   # separate tmpfs, noexec
+/var/local/ksubstrate/runtime/state/   # separate tmpfs, noexec
   control.sock
   mounts.journal
   session.env
@@ -188,8 +188,8 @@ rust/ksubstrated/src/
    ```
 
 2. During install, copy the wrapper to
-   `/var/local/kmc/ksubstrate-assets/wrapper.sh` with mode `0555`.
-3. During install, create `/var/local/kmc/tweaks` and the two empty runtime
+   `/var/local/ksubstrate/assets/wrapper.sh` with mode `0555`.
+3. During install, create `/var/local/ksubstrate/tweaks` and the two empty runtime
    mount-point directories.
 4. Assert the mount-point directories are not mounted and contain no files
    before installation writes into them.
@@ -326,7 +326,7 @@ rust/ksubstrated/src/
    ```text
    LD_PRELOAD=<bootstrap>
    LD_LIBRARY_PATH=<runtime lib directory>
-   KSUBSTRATE_TWEAKS_DIR=/var/local/kmc/tweaks
+   KSUBSTRATE_TWEAKS_DIR=/var/local/ksubstrate/tweaks
    KSUBSTRATE_LOG=<state tmpfs>/log/tweaks.log
    ```
 
@@ -353,7 +353,7 @@ rust/ksubstrated/src/
 
 ### Work
 
-1. Make `/var/local/kmc/tweaks` the single persistent registry.
+1. Make `/var/local/ksubstrate/tweaks` the single persistent registry.
 2. During runtime, scan and read only. Do not create, rename, delete, or repair
    tweak files.
 3. Validate package ID, manifest, platform, filter, library, dependencies,
@@ -388,7 +388,7 @@ rust/ksubstrated/src/
    staging:
 
    ```text
-   /var/local/kmc/tweaks/.<id>.staging.<pid>
+   /var/local/ksubstrate/tweaks/.<id>.staging.<pid>
    ```
 
 2. Select and stage the correct ABI library.
@@ -464,14 +464,13 @@ rust/ksubstrated/src/
 
 1. Before replacing the current runtime, invoke the old `app.sh disable` while
    the old daemon and basename layout are still present.
-2. Verify no old wrapper mounts remain under:
+2. Verify the runtime mount point is inactive and empty:
 
    ```text
-   /var/local/kmc/ksubstrate/run/orig
-   /var/local/kmc/ksubstrate/run/wrappers
+   /var/local/ksubstrate/runtime/mounts
    ```
 
-3. If legacy mounts remain, stop the upgrade and require a reboot.
+3. If it is mounted or non-empty, stop the upgrade and require a reboot.
 4. Remove stale unmounted legacy files only during install/upgrade, never from
    the running daemon.
 5. Do not automatically re-enable after runtime upgrade.

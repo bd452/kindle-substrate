@@ -153,8 +153,8 @@ demo hid #1 and #2.
 - **Remediation:** R6.
 
 ### D13 — Smaller spec deltas
-- Tweak install path: `A§8.1` `/var/local/kmc/tweaks/` vs built default
-  `…/packages/com.bd452.ksubstrate/tweaks` (two conventions). — R4.
+- Tweak install path: the old specification and built default used two
+  conflicting conventions. — R4.
 - Header hand-written vs cbindgen-generated (`plan:ksubstrate-engine`). — R6.
 - Bootstrap doesn't call the optional `ksubstrate_init` (`A§4.3`); relies on
   `.init_array` only. — R6.
@@ -215,7 +215,7 @@ wiring; C ABI + `MSHookFunction`/`MSFindSymbol` aliases; v1 non-goals respected
   rate), not just monitor restarts.
 - **R4d (inheritance):** ship the `A§6.4` probe tweak; document/auto-add a Tier-2
   wrapper when env is stripped.
-- **R4e (paths):** converge tweak dir on `A§8.1` `/var/local/kmc/tweaks/`.
+- **R4e (paths):** use `/var/local/ksubstrate/tweaks/`, outside KPM's immutable namespace.
 
 ### R5 — Toolchain honesty + Logos  *(D10, D11, D13-new/scaffold)*
 - Implement `%hookf` and `KSYM("name")` in `ksub-logos`, resolving against the DB

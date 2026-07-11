@@ -8,7 +8,7 @@ use std::path::Path;
 use std::sync::Once;
 
 const SENTINEL: &str = "/mnt/us/DISABLE_KSUBSTRATE";
-const STATE_PLAN: &str = "/var/local/kmc/ksubstrate-runtime/state/session.plan";
+const STATE_PLAN: &str = "/var/local/ksubstrate/runtime/state/session.plan";
 static BOOTSTRAP_ONCE: Once = Once::new();
 
 #[cfg_attr(target_os = "linux", link_section = ".init_array")]

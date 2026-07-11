@@ -92,7 +92,8 @@ ABIs exist, then writes `dist/*.kpkg`.
 
 The generated KPM package has an explicit runtime dependency. On install, it
 selects the device ABI and copies the library and manifest to
-`/var/local/kmc/tweaks/<package-id>/`. Install stages payloads in a hidden
+`/var/local/ksubstrate/tweaks/<package-id>/`. This is deliberately outside
+KPM's immutable `/var/local/kmc` namespace. Install stages payloads in a hidden
 same-filesystem directory and atomically renames them into the visible registry;
 uninstall first renames the active directory away. Both operations defer
 `post-package-change`, which synchronously reconciles an active session and

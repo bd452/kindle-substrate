@@ -6,5 +6,5 @@ if [ "${1:-}" = upgrade ]; then
 fi
 [ -x ./app.sh ] && ./app.sh disable || true
 rm -f /mnt/us/documents/com.bd452.ksubstrate-enable.sh /mnt/us/documents/com.bd452.ksubstrate-disable.sh /mnt/us/documents/com.bd452.ksubstrate-reframe.sh
-rm -f /var/local/kmc/ksubstrate-assets/wrapper.sh
-# Third-party payloads under /var/local/kmc/tweaks deliberately survive.
+rm -f /var/local/ksubstrate/assets/wrapper.sh
+# Third-party payloads under /var/local/ksubstrate/tweaks deliberately survive.
