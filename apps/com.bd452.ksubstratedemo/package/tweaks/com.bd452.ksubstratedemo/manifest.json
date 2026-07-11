@@ -1,4 +1,5 @@
 {
+  "manifest_version": 2,
   "id": "com.bd452.ksubstratedemo.sample-tweak",
   "name": "Kindle Substrate Sample Tweak",
   "version": [
@@ -6,6 +7,13 @@
     1,
     0
   ],
-  "filter": "tweak.ksfilter",
-  "library": "tweak.so"
+  "library": "tweak.so",
+  "initialization": "constructor",
+  "targets": [
+    {
+      "kind": "kpm",
+      "package": "com.bd452.ksubstratedemo",
+      "path": "bin/{platform}/ksubstrate-demo-target"
+    }
+  ]
 }

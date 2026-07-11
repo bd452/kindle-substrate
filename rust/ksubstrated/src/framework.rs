@@ -15,6 +15,8 @@ pub fn restart_hooked() -> Result<(), String> {
     run("lipc-set-prop", &["com.lab126.appmgrd", "start", "app://com.lab126.booklet.home"])
 }
 
+pub fn stop_framework() -> Result<(), String> { run("initctl", &["stop", "framework"]) }
+
 pub fn restart_stock() -> Result<(), String> { run("initctl", &["restart", "framework"]) }
 
 pub fn wait_for_framework_health(timeout: Duration) -> Result<(), String> {

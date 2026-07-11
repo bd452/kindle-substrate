@@ -12,3 +12,5 @@ path = "src/main.rs"
 
 [dependencies]
 kindle-compat = { path = "../kindle-compat" }
+ksubstrate-targets = { path = "../ksubstrate-targets" }
+libc.workspace = true

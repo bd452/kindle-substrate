@@ -1,3 +1,0 @@
-# Inheritance probe: match every process so we can see everywhere LD_PRELOAD
-# reaches. Install under /var/local/kmc/tweaks/com.bd452.ksubstrateprobe/.
-*

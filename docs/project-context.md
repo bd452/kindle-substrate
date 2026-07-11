@@ -44,7 +44,7 @@ The core safety decision is that hooking is session-scoped:
 3. `ksubstrated` installs volatile wrappers for approved process roots.
 4. The Kindle framework restarts through those wrappers.
 5. `LD_PRELOAD` loads the bootstrap before target code runs.
-6. The bootstrap matches process filters and loads applicable tweaks.
+6. The bootstrap verifies an explicit target identity and loads its planned tweaks.
 7. Disable, crash recovery, or reboot returns the device to stock behavior.
 
 The design avoids global `/etc/ld.so.preload`, persistent boot-time arming,
@@ -63,11 +63,10 @@ most dependable recovery tools.
 - ELF PLT/GOT import hooking through `kh_hook_import`.
 - Symbol lookup through `dlsym` and Dobby's symbol resolver.
 - Firmware-private address resolution through module load base plus RVA.
-- A preload bootstrap that checks the USB disable sentinel, matches
-  `.ksfilter` files, and loads tweaks using one manifest-selected initialization
-  contract: the default constructor, or an explicit `ksubstrate_init` entrypoint.
-- `ksubstrated`, which owns session wrappers, framework restart, cleanup,
-  process blacklisting, and crash-loop monitoring.
+- A preload bootstrap that checks the USB disable sentinel and loads only the
+  exact target entries in the committed session plan.
+- `ksubstrated`, a short-lived transactional controller for wrappers,
+  framework restart, cleanup, and recovery.
 - A device CLI for launching a process with the runtime environment.
 
 ### Packages and Diagnostics

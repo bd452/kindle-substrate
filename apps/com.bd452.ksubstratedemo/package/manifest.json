@@ -1,5 +1,6 @@
 {
   "manifest_version": 1,
+  "ksubstrate_target_lifecycle": true,
   "id": "com.bd452.ksubstratedemo",
   "name": "Kindle Substrate Demo",
   "author": "Bryce",

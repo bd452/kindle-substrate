@@ -1,196 +1,28 @@
+use ksubstrate_targets::{self as targets, decode_plan, library_identity, parse_manifest, resolve, PlanTarget, SessionPlan};
 use std::env;
+use std::fs;
+use std::io::Write;
+use std::os::fd::FromRawFd;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+#[cfg(unix)] use std::os::unix::process::CommandExt;
 
-#[cfg(unix)]
-use std::os::unix::process::CommandExt;
+const STATE_PLAN: &str = "/var/local/kmc/ksubstrate-runtime/state/session.plan";
 
-fn main() {
-    kindle_compat::ensure_linked();
-    if let Err(error) = run() {
-        eprintln!("{error}");
-        std::process::exit(1);
-    }
-}
+fn main(){kindle_compat::ensure_linked();if let Err(error)=run(){eprintln!("{error}");std::process::exit(1)}}
+fn run()->Result<(),String>{let mut args=env::args().skip(1);match args.next().as_deref(){Some("run")=>run_one_shot(args.collect()),Some("wrapped-exec")=>wrapped_exec(args.collect()),Some("paths")=>{let paths=Paths::runtime()?;println!("package={}",paths.package.display());println!("platform={}",paths.platform);Ok(())},Some("help")|Some("--help")|Some("-h")|None=>{println!("ksubstrate run <program> [args...]\nksubstrate wrapped-exec <path> [args...]");Ok(())},Some(value)=>Err(format!("unknown command: {value}"))}}
 
-fn run() -> Result<(), String> {
-    let mut args = env::args().skip(1);
-    match args.next().as_deref() {
-        Some("run") => run_preloaded(args.collect()),
-        Some("wrapped-exec") => wrapped_exec(args.collect()),
-        Some("paths") => {
-            let paths = Paths::detect()?;
-            println!("package={}", paths.package.display());
-            println!("platform={}", paths.platform);
-            println!("bootstrap={}", paths.bootstrap.display());
-            println!("tweaks={}", paths.tweaks.display());
-            Ok(())
-        }
-        Some("help") | Some("--help") | Some("-h") | None => {
-            print_help();
-            Ok(())
-        }
-        Some(command) => Err(format!("unknown command: {command}")),
-    }
-}
+fn wrapped_exec(args:Vec<String>)->Result<(),String>{let(invoked,rest)=args.split_first().ok_or_else(||"usage: ksubstrate wrapped-exec <path> [args...]".to_owned())?;let invoked=PathBuf::from(invoked);let plan=decode_plan(&fs::read_to_string(STATE_PLAN).map_err(|e|format!("read active session plan: {e}"))?)?;let target=plan.targets.iter().find(|target|target.target.executable==invoked).ok_or_else(||"invoked path is not an active canonical target".to_owned())?;verify_mounts(&target.target.executable,&target.alias)?;let paths=Paths::runtime()?;exec_preloaded(&target.alias,rest,&paths,&target.target.id,&target.alias,plan.generation,None)}
 
-fn run_preloaded(command: Vec<String>) -> Result<(), String> {
-    let (program, rest) = command
-        .split_first()
-        .ok_or_else(|| "usage: ksubstrate run <program> [args...]".to_owned())?;
-    let paths = Paths::detect()?;
-    exec_preloaded(Path::new(program), rest, &paths, None)
-}
+fn run_one_shot(args:Vec<String>)->Result<(),String>{let(program,rest)=args.split_first().ok_or_else(||"usage: ksubstrate run <program> [args...]".to_owned())?;let program=fs::canonicalize(program).map_err(|e|format!("resolve program: {e}"))?;let paths=Paths::runtime()?;let plan=one_shot_plan(&program,env::var("KSUBSTRATE_TWEAKS_DIR").map(PathBuf::from).unwrap_or_else(|_|PathBuf::from(targets::TWEAKS_ROOT)))?;let target=plan.targets.first().ok_or_else(||"one-shot plan has no target".to_owned())?;let fd=plan_pipe(&plan)?;exec_preloaded(&program,rest,&paths,&target.target.id,&program,plan.generation,Some(fd))}
 
-fn wrapped_exec(command: Vec<String>) -> Result<(), String> {
-    let (invoked, rest) = command.split_first().ok_or_else(|| "usage: ksubstrate wrapped-exec <invoked-path> [args...]".to_owned())?;
-    let invoked = Path::new(invoked);
-    if !valid_system_path(invoked) {
-        return Err("wrapped executable path is not an approved system executable".to_owned());
-    }
-    let original = Path::new("/var/local/kmc/ksubstrate-runtime/mounts/original").join(invoked.strip_prefix("/").map_err(|_| "invalid invoked path")?);
-    verify_wrapped_mounts(invoked, &original)?;
-    let paths = Paths::detect_runtime()?;
-    exec_preloaded(&original, rest, &paths, Some(Path::new("/var/local/kmc/ksubstrate-runtime/state/log/tweaks.log")))
-}
+fn one_shot_plan(program:&Path,root:PathBuf)->Result<SessionPlan,String>{let mut targets_out=Vec::new();let entries=fs::read_dir(&root).map_err(|e|format!("read tweak registry for run: {e}"))?;for entry in entries{let entry=entry.map_err(|e|e.to_string())?;if entry.file_name().to_string_lossy().starts_with('.'){continue}let dir=entry.path();let manifest=parse_manifest(&fs::read_to_string(dir.join("manifest.json")).map_err(|e|format!("read manifest: {e}"))?)?;let library=library_identity(manifest.id.clone(),dir.join(&manifest.library),manifest.initialization.clone())?;for spec in manifest.targets{let resolved=resolve(&spec,targets::platform())?;if resolved.executable==program{if let Some(existing)=targets_out.iter_mut().find(|target:&&mut PlanTarget|target.target.id==resolved.id){existing.libraries.push(library.clone())}else{targets_out.push(PlanTarget{alias:program.to_path_buf(),target:resolved,libraries:vec![library.clone()]})}}}}if targets_out.is_empty(){return Err("program is not an explicit manifest-v2 target".to_owned())}Ok(SessionPlan{generation:0,platform:targets::platform().to_owned(),targets:targets_out})}
 
-fn exec_preloaded(program: &Path, rest: &[String], paths: &Paths, log: Option<&Path>) -> Result<(), String> {
+fn plan_pipe(plan:&SessionPlan)->Result<i32,String>{let mut fds=[0;2];if unsafe{libc::pipe(fds.as_mut_ptr())}!=0{return Err(format!("create one-shot plan pipe: {}",std::io::Error::last_os_error()))}let mut writer=unsafe{fs::File::from_raw_fd(fds[1])};writer.write_all(targets::encode_plan(plan).as_bytes()).map_err(|e|format!("write one-shot plan: {e}"))?;drop(writer);Ok(fds[0])}
 
-    let mut ld_preload = paths.bootstrap.to_string_lossy().into_owned();
-    if let Ok(existing) = env::var("LD_PRELOAD") {
-        if !existing.trim().is_empty() {
-            ld_preload.push(' ');
-            ld_preload.push_str(&existing);
-        }
-    }
+fn exec_preloaded(program:&Path,args:&[String],paths:&Paths,target:&str,expected:&Path,generation:u64,one_shot:Option<i32>)->Result<(),String>{let mut preload=paths.bootstrap.to_string_lossy().into_owned();if let Ok(existing)=env::var("LD_PRELOAD"){if !existing.trim().is_empty(){preload.push(' ');preload.push_str(&existing)}}let lib=paths.bootstrap.parent().ok_or_else(||"bootstrap has no parent".to_owned())?;let mut command=Command::new(program);command.args(args).env("LD_PRELOAD",preload).env("LD_LIBRARY_PATH",lib).env("KSUBSTRATE_TARGET",target).env("KSUBSTRATE_EXPECTED_EXE",expected).env("KSUBSTRATE_SESSION_GENERATION",generation.to_string()).env("KSUBSTRATE_TWEAKS_DIR",targets::TWEAKS_ROOT);if let Some(fd)=one_shot{command.env("KSUBSTRATE_ONESHOT_PLAN_FD",fd.to_string());}else{command.env("KSUBSTRATE_LOG","/var/local/kmc/ksubstrate-runtime/state/log/tweaks.log");}#[cfg(unix)]{let error=command.exec();Err(format!("exec {}: {error}",program.display()))}#[cfg(not(unix))]{let status=command.status().map_err(|e|e.to_string())?;std::process::exit(status.code().unwrap_or(1))}}
 
-    let lib_dir = paths
-        .bootstrap
-        .parent()
-        .ok_or_else(|| "bootstrap path has no parent".to_owned())?;
-    let mut ld_library_path = lib_dir.to_string_lossy().into_owned();
-    if let Ok(existing) = env::var("LD_LIBRARY_PATH") {
-        if !existing.trim().is_empty() {
-            ld_library_path.push(':');
-            ld_library_path.push_str(&existing);
-        }
-    }
+fn verify_mounts(executable:&Path,alias:&Path)->Result<(),String>{let input=fs::read_to_string("/proc/self/mountinfo").map_err(|e|format!("read mountinfo: {e}"))?;for path in [executable,alias]{let entry=input.lines().find(|line|line.split_whitespace().nth(4).is_some_and(|point|point==path.to_string_lossy())).ok_or_else(||format!("missing bind mount {}",path.display()))?;let options=entry.split_whitespace().nth(5).unwrap_or("");if !options.split(',').any(|value|value=="ro"){return Err(format!("bind mount is not read-only: {}",path.display()))}}Ok(())}
 
-    let mut command = Command::new(program);
-    command.args(rest);
-    command.env("LD_PRELOAD", ld_preload);
-    command.env("LD_LIBRARY_PATH", ld_library_path);
-    command.env("KSUBSTRATE_TWEAKS_DIR", &paths.tweaks);
-    if let Some(log) = log { command.env("KSUBSTRATE_LOG", log); }
-
-    #[cfg(unix)]
-    {
-        let error = command.exec();
-        Err(format!("failed to exec {}: {error}", program.display()))
-    }
-
-    #[cfg(not(unix))]
-    {
-        let status = command.status().map_err(|error| format!("failed to run {}: {error}", program.display()))?;
-        std::process::exit(status.code().unwrap_or(1));
-    }
-}
-
-fn valid_system_path(path: &Path) -> bool {
-    path.is_absolute()
-        && path.components().all(|component| !matches!(component, std::path::Component::ParentDir | std::path::Component::CurDir))
-        && ["/usr/bin", "/usr/sbin", "/bin", "/sbin"].iter().any(|root| path.starts_with(root))
-        && !matches!(path.file_name().and_then(|name| name.to_str()), Some("powerd" | "sshd" | "dbus-daemon" | "dbus" | "otav3" | "otaupd" | "mmcqd" | "wpa_supplicant" | "dhcpd"))
-}
-
-fn verify_wrapped_mounts(invoked: &Path, original: &Path) -> Result<(), String> {
-    let entries = mount_info()?;
-    let mounts_root = Path::new("/var/local/kmc/ksubstrate-runtime/mounts");
-    let state_root = Path::new("/var/local/kmc/ksubstrate-runtime/state");
-    verify_tmpfs(&entries, mounts_root, false)?;
-    verify_tmpfs(&entries, state_root, true)?;
-    let alias = entries.iter().find(|entry| entry.point == original).ok_or_else(|| format!("no original alias for {}", invoked.display()))?;
-    if !alias.readonly() || alias.root != invoked { return Err("original alias is not the expected read-only bind mount".to_owned()); }
-    let wrapper = entries.iter().find(|entry| entry.point == invoked).ok_or_else(|| format!("no wrapper mount for {}", invoked.display()))?;
-    if !wrapper.readonly() || wrapper.root != Path::new("/var/local/kmc/ksubstrate-assets/wrapper.sh") { return Err("system path is not the expected read-only wrapper bind".to_owned()); }
-    Ok(())
-}
-
-fn verify_tmpfs(entries: &[MountInfo], path: &Path, noexec: bool) -> Result<(), String> {
-    let entry = entries.iter().find(|entry| entry.point == path).ok_or_else(|| format!("missing runtime tmpfs {}", path.display()))?;
-    if entry.fs_type != "tmpfs" || !entry.has("nodev") || !entry.has("nosuid") || entry.has("noexec") != noexec { return Err(format!("runtime tmpfs {} has unsafe options", path.display())); }
-    Ok(())
-}
-
-#[derive(Debug)] struct MountInfo { root: PathBuf, point: PathBuf, options: String, fs_type: String }
-impl MountInfo { fn has(&self, option: &str) -> bool { self.options.split(',').any(|value| value == option) } fn readonly(&self) -> bool { self.has("ro") } }
-fn mount_info() -> Result<Vec<MountInfo>, String> {
-    std::fs::read_to_string("/proc/self/mountinfo").map_err(|e| format!("read mountinfo: {e}"))?.lines().map(|line| {
-        let (left, right) = line.split_once(" - ").ok_or_else(|| "malformed mountinfo".to_owned())?; let left: Vec<_> = left.split_whitespace().collect(); let right: Vec<_> = right.split_whitespace().collect();
-        Ok(MountInfo { root: PathBuf::from(left.get(3).ok_or_else(|| "missing mount root".to_owned())?), point: PathBuf::from(left.get(4).ok_or_else(|| "missing mount point".to_owned())?), options: left.get(5).ok_or_else(|| "missing mount options".to_owned())?.to_string(), fs_type: right.first().ok_or_else(|| "missing filesystem type".to_owned())?.to_string() })
-    }).collect()
-}
-
-fn print_help() {
-    println!("ksubstrate device helper");
-    println!("usage:");
-    println!("  ksubstrate run <program> [args...]");
-    println!("  ksubstrate wrapped-exec <invoked-path> [args...]");
-    println!("  ksubstrate paths");
-}
-
-struct Paths {
-    package: PathBuf,
-    platform: String,
-    bootstrap: PathBuf,
-    tweaks: PathBuf,
-}
-
-impl Paths {
-    fn detect() -> Result<Self, String> {
-        let package = env::var("KSUBSTRATE_PACKAGE_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| package_from_exe().unwrap_or_else(|| PathBuf::from("/mnt/us/kmc/kpm/packages/com.bd452.ksubstrate")));
-        let platform = env::var("KSUBSTRATE_PLATFORM").unwrap_or_else(|_| detect_platform());
-        let bootstrap = package
-            .join("lib")
-            .join(&platform)
-            .join("libksubstrate-bootstrap.so");
-        if !bootstrap.is_file() {
-            return Err(format!("bootstrap not found at {}", bootstrap.display()));
-        }
-        let tweaks = env::var("KSUBSTRATE_TWEAKS_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from("/var/local/kmc/tweaks"));
-        Ok(Self {
-            package,
-            platform,
-            bootstrap,
-            tweaks,
-        })
-    }
-
-    fn detect_runtime() -> Result<Self, String> {
-        let package = PathBuf::from("/mnt/us/kmc/kpm/packages/com.bd452.ksubstrate");
-        let platform = detect_platform();
-        let bootstrap = package.join("lib").join(&platform).join("libksubstrate-bootstrap.so");
-        if !bootstrap.is_file() { return Err(format!("bootstrap not found at {}", bootstrap.display())); }
-        Ok(Self { package, platform, bootstrap, tweaks: PathBuf::from("/var/local/kmc/tweaks") })
-    }
-}
-
-fn package_from_exe() -> Option<PathBuf> {
-    let exe = env::current_exe().ok()?;
-    let platform_dir = exe.parent()?;
-    let bin_dir = platform_dir.parent()?;
-    let package = bin_dir.parent()?;
-    Some(package.to_path_buf())
-}
-
-fn detect_platform() -> String {
-    if Path::new("/lib/ld-linux-armhf.so.3").exists() {
-        "kindlehf".to_owned()
-    } else {
-        "kindlepw2".to_owned()
-    }
-}
+struct Paths{package:PathBuf,platform:String,bootstrap:PathBuf}
+impl Paths{fn runtime()->Result<Self,String>{let package=PathBuf::from("/mnt/us/kmc/kpm/packages/com.bd452.ksubstrate");let platform=targets::platform().to_owned();let bootstrap=package.join("lib").join(&platform).join("libksubstrate-bootstrap.so");if !bootstrap.is_file(){return Err(format!("bootstrap not found at {}",bootstrap.display()))}Ok(Self{package,platform,bootstrap})}}

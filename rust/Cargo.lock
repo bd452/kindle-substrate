@@ -42,6 +42,7 @@ name = "ksubstrate-bootstrap"
 version = "0.1.0"
 dependencies = [
  "ksubstrate",
+ "ksubstrate-targets",
  "libc",
 ]
 
@@ -50,6 +51,8 @@ name = "ksubstrate-cli"
 version = "0.1.0"
 dependencies = [
  "kindle-compat",
+ "ksubstrate-targets",
+ "libc",
 ]
 
 [[package]]
@@ -74,10 +77,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ksubstrate-targets"
+version = "0.1.0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "ksubstrated"
 version = "0.1.0"
 dependencies = [
  "kindle-compat",
+ "ksubstrate-targets",
  "libc",
 ]
 

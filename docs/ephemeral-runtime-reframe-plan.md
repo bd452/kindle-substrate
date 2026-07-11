@@ -1,5 +1,9 @@
 # Ephemeral Runtime and Reframe Implementation Plan
 
+> Superseded by [explicit-target-controller-plan.md](explicit-target-controller-plan.md).
+> The original socket-daemon and filter-based portions are retained here only as
+> historical design context.
+
 ## Purpose
 
 Replace the current runtime-generated wrapper and persistent session-state model

@@ -83,7 +83,7 @@ Each layer has one owner contract. **Lower layers must not depend on upper ones.
 | Layer | Owns | Public contract | Current gap |
 |-------|------|-----------------|-------------|
 | **L0 Engine** | `libksubstrate` + Dobby + ELF GOT | `ksubstrate.h` C ABI | GOT harden; import unhook; device verify |
-| **L1 Bootstrap** | LD_PRELOAD loader | sentinel → filter → `dlopen` → optional init | double-init guard; panic containment |
+| **L1 Bootstrap** | LD_PRELOAD loader | sentinel → explicit target plan → `dlopen` → declared init | identity guard; panic containment |
 | **L2 Session** | `ksubstrated` | enable/disable/status + volatile wraps | readiness, journal, firmware profiles |
 | **L3 Packages** | KPM runtime + demo | `.kpkg` layout + launchers | tweak registry; path convergence |
 | **L4 Host SDK** | `ksub` / logos / syms | build → package → deploy → symbols | pull automation; Logos dialect; DB pipeline |
@@ -189,7 +189,7 @@ injection modes.
 
 #### Registry & Logos
 
-- [ ] Tweak manifest v2: `id`, `version`, `abi`, `firmware[]`, `depends`, `conflicts`, `order`, `filter`, `library`
+- [ ] Tweak manifest v2: explicit `targets`, `library`, and `initialization` plus compatibility metadata
 - [ ] Atomic install: stage → validate → rename into tweaks/; `registry.json`
 - [ ] Freeze `ksub-logos` dialect; reject unsupported constructs with clear errors
 - [ ] `KSYM` via DB (RVA + checked) when image known; else `dlsym`
@@ -369,7 +369,7 @@ Already in good shape relative to the original divergence audit:
 - Dobby-backed ARM/Thumb inline hooks (host mock; device verify pending)
 - Native ELF PLT/GOT `kh_hook_import` (host fixtures; harden + device verify pending)
 - Volatile bind-mount session wrappers, blacklist, UI health / crash guard
-- Bootstrap USB sentinel, filter match (incl. 15-byte `comm` truncation), optional `ksubstrate_init`
+- Bootstrap USB sentinel, explicit target identity, committed session-plan loading, declared initialization
 - Demo package exercising real inline + GOT paths
 - Inheritance probe (opt-in diagnostics)
 - Host `ksub` / experimental logos / YAML symbol DB parser

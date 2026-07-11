@@ -1,9 +1,5 @@
-//! Inheritance probe (A§6.4). A `*`-filter tweak that records every process it
-//! is loaded into. After enabling a session with this installed, inspect the
-//! tweak log to see which processes actually received `LD_PRELOAD` — including
-//! booklets spawned by a preloaded `appmgrd` — to confirm inheritance or find a
-//! process whose launcher strips the environment (which then needs a Tier-2
-//! wrapper).
+//! Explicit-target diagnostic probe. It records the canonical target identity
+//! and executable identity supplied by the wrapper/controller.
 
 #[cfg(ksubstrate_dynamic)]
 use std::os::raw::c_char;
@@ -19,11 +15,10 @@ extern "C" fn init() {
 
 #[cfg(ksubstrate_dynamic)]
 fn report() {
-    let comm = std::fs::read_to_string("/proc/self/comm")
-        .map(|value| value.trim().to_owned())
-        .unwrap_or_else(|_| "unknown".to_owned());
+    let target = std::env::var("KSUBSTRATE_TARGET").unwrap_or_else(|_| "unknown".to_owned());
+    let executable = std::fs::read_link("/proc/self/exe").map(|value| value.display().to_string()).unwrap_or_else(|_| "unknown".to_owned());
     let pid = std::process::id();
-    log(&format!("probe: loaded in comm={comm} pid={pid}"));
+    log(&format!("probe: loaded target={target} exe={executable} pid={pid}"));
 }
 
 #[cfg(not(ksubstrate_dynamic))]

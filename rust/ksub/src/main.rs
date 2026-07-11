@@ -57,8 +57,6 @@ fn command_new(args: Vec<String>) -> Result<(), String> {
                 .map_err(|error| format!("failed to write build.rs: {error}"))?;
             fs::write(root.join("src/lib.rs"), SAMPLE_TWEAK)
                 .map_err(|error| format!("failed to write source: {error}"))?;
-            fs::write(root.join("tweak.ksfilter"), "pillow\n")
-                .map_err(|error| format!("failed to write filter: {error}"))?;
             // KPM package skeleton (A§9.1): a package manifest plus the tweak
             // payload layout the bootstrap expects under tweaks/<id>/.
             let tweak_pkg = root.join("package").join("tweak");
@@ -71,8 +69,6 @@ fn command_new(args: Vec<String>) -> Result<(), String> {
             .map_err(|error| format!("failed to write package manifest: {error}"))?;
             fs::write(tweak_pkg.join("manifest.json"), tweak_manifest_json(name))
                 .map_err(|error| format!("failed to write tweak manifest: {error}"))?;
-            fs::write(tweak_pkg.join("tweak.ksfilter"), "pillow\n")
-                .map_err(|error| format!("failed to write packaged filter: {error}"))?;
             fs::write(root.join("package/install.sh"), install_script())
                 .map_err(|error| format!("failed to write install hook: {error}"))?;
             fs::write(root.join("package/uninstall.sh"), uninstall_script())
@@ -350,9 +346,8 @@ STAGE="$ROOT/.$ID.staging.$$"
 OLD="$ROOT/.$ID.retired.$$"
 mkdir "$STAGE"
 cp "$PKG/lib/$PLAT/tweak.so" "$STAGE/tweak.so"
-cp "$PKG/tweak/tweak.ksfilter" "$STAGE/tweak.ksfilter"
 cp "$PKG/tweak/manifest.json" "$STAGE/manifest.json"
-test -s "$STAGE/tweak.so" && test -s "$STAGE/tweak.ksfilter" && test -s "$STAGE/manifest.json"
+test -s "$STAGE/tweak.so" && test -s "$STAGE/manifest.json"
 rollback() {
     if [ -e "$OLD" ] && [ ! -e "$DEST" ]; then mv "$OLD" "$DEST" || true; fi
     rm -rf "$STAGE"
@@ -361,15 +356,19 @@ trap rollback EXIT HUP INT TERM
 if [ -e "$DEST" ]; then mv "$DEST" "$OLD"; fi
 mv "$STAGE" "$DEST"
 trap - EXIT HUP INT TERM
+if ! "/mnt/us/kmc/kpm/packages/com.bd452.ksubstrate/app.sh" post-package-change; then
+    rm -rf "$DEST"
+    [ -e "$OLD" ] && mv "$OLD" "$DEST"
+    exit 1
+fi
 rm -rf "$OLD"
-"/mnt/us/kmc/kpm/packages/com.bd452.ksubstrate/app.sh" reframe-if-active-deferred || true
-echo "Installed $ID. An active session will reframe after this hook disconnects."
+echo "Installed $ID. Active sessions reconciled successfully."
 "#
     .to_owned()
 }
 
 fn uninstall_script() -> String {
-    "#!/bin/sh\nset -e\n[ \"${1:-}\" = upgrade ] && exit 0\nPKG=\"$(CDPATH= cd \"$(dirname \"$0\")\" && pwd)\"\nID=\"$(basename \"$PKG\")\"\nROOT=/var/local/kmc/tweaks\nDEST=\"$ROOT/$ID\"\nRETIRED=\"$ROOT/.$ID.retired.$$\"\nif [ -e \"$DEST\" ]; then mv \"$DEST\" \"$RETIRED\"; fi\n\"/mnt/us/kmc/kpm/packages/com.bd452.ksubstrate/app.sh\" reframe-if-active-deferred || true\nrm -rf \"$RETIRED\"\n".to_owned()
+    "#!/bin/sh\nset -e\n[ \"${1:-}\" = upgrade ] && exit 0\nPKG=\"$(CDPATH= cd \"$(dirname \"$0\")\" && pwd)\"\nID=\"$(basename \"$PKG\")\"\nROOT=/var/local/kmc/tweaks\nDEST=\"$ROOT/$ID\"\nRETIRED=\"$ROOT/.$ID.retired.$$\"\nif [ -e \"$DEST\" ]; then mv \"$DEST\" \"$RETIRED\"; fi\nif ! \"/mnt/us/kmc/kpm/packages/com.bd452.ksubstrate/app.sh\" post-package-change; then [ -e \"$RETIRED\" ] && mv \"$RETIRED\" \"$DEST\"; exit 1; fi\nrm -rf \"$RETIRED\"\n".to_owned()
 }
 
 fn tweak_readme(name: &str) -> String {
@@ -378,7 +377,7 @@ fn tweak_readme(name: &str) -> String {
 
 fn tweak_manifest_json(name: &str) -> String {
     format!(
-        "{{\n  \"id\": \"com.example.{name}\",\n  \"name\": \"{name}\",\n  \"version\": [0, 1, 0],\n  \"filter\": \"tweak.ksfilter\",\n  \"library\": \"tweak.so\",\n  \"initialization\": \"constructor\"\n}}\n"
+        "{{\n  \"manifest_version\": 2,\n  \"id\": \"com.example.{name}\",\n  \"name\": \"{name}\",\n  \"version\": [0, 1, 0],\n  \"library\": \"tweak.so\",\n  \"initialization\": \"constructor\",\n  \"targets\": [\"pillow\"]\n}}\n"
     )
 }
 
@@ -496,6 +495,11 @@ mod tests {
         assert!(manifest.contains("\"id\": \"com.example.my-tweak\""));
         assert!(project.join("package/install.sh").is_file());
         assert!(project.join("package/uninstall.sh").is_file());
+        assert!(!project.join("tweak.ksfilter").exists());
+        assert!(!project.join("package/tweak/tweak.ksfilter").exists());
+        let tweak_manifest = fs::read_to_string(project.join("package/tweak/manifest.json")).unwrap();
+        assert!(tweak_manifest.contains("\"manifest_version\": 2"));
+        assert!(tweak_manifest.contains("\"targets\": [\"pillow\"]"));
 
         fs::remove_dir_all(root).unwrap();
     }

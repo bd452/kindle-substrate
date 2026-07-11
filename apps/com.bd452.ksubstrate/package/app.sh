@@ -18,28 +18,36 @@ fi
 
 case "${1:-toggle}" in
     enable)
-        exec "$DAEMON" --enable
+        exec "$DAEMON" enable
         ;;
     disable)
-        exec "$DAEMON" --disable
+        exec "$DAEMON" disable
         ;;
     status)
-        exec "$DAEMON" --status
+        exec "$DAEMON" status
         ;;
     reframe)
-        exec "$DAEMON" --reframe
+        exec "$DAEMON" reframe
         ;;
     reframe-if-active)
-        exec "$DAEMON" --reframe-if-active
+        exec "$DAEMON" reframe-if-active
         ;;
-    reframe-if-active-deferred)
-        exec "$DAEMON" --reframe-if-active-deferred
+    post-package-change)
+        exec "$DAEMON" post-package-change
+        ;;
+    prepare-target-package-change)
+        shift
+        exec "$DAEMON" prepare-target-package-change "$@"
+        ;;
+    finish-target-package-change)
+        shift
+        exec "$DAEMON" finish-target-package-change "$@"
         ;;
     toggle)
-        exec "$DAEMON" --toggle
+        exec "$DAEMON" toggle
         ;;
     *)
-        echo "usage: $0 [enable|disable|status|reframe|reframe-if-active|reframe-if-active-deferred|toggle]" >&2
+        echo "usage: $0 [enable|disable|status|reframe|reframe-if-active|post-package-change|prepare-target-package-change <package>|finish-target-package-change <package>|toggle]" >&2
         exit 64
         ;;
 esac

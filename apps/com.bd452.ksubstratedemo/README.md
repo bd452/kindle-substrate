@@ -15,5 +15,5 @@ package/bin/kindlepw2/ksubstrate-demo-target
 package/tweaks/com.bd452.ksubstratedemo/tweak.so
 ```
 
-The checked-in `.ksfilter` names `ksubstrate-demo-target`, so the installed
+The checked-in manifest explicitly targets `ksubstrate-demo-target`, so the installed
 runtime bootstrap should load the sample tweak only for that target process.

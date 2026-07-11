@@ -3,11 +3,12 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Component, Path, PathBuf};
+use ksubstrate_targets::ResolvedTarget;
 
+pub const RUNTIME_ROOT: &str = "/var/local/kmc/ksubstrate-runtime";
 pub const MOUNTS_ROOT: &str = "/var/local/kmc/ksubstrate-runtime/mounts";
 pub const STATE_ROOT: &str = "/var/local/kmc/ksubstrate-runtime/state";
 pub const WRAPPER_ASSET: &str = "/var/local/kmc/ksubstrate-assets/wrapper.sh";
-pub const TWEAKS_ROOT: &str = "/var/local/kmc/tweaks";
 
 #[derive(Debug, Clone, PartialEq, Eq)] pub struct SystemExecutable(PathBuf);
 #[derive(Debug, Clone, PartialEq, Eq)] pub struct OriginalAlias(PathBuf);
@@ -16,6 +17,18 @@ pub const TWEAKS_ROOT: &str = "/var/local/kmc/tweaks";
 #[derive(Debug, Clone, PartialEq, Eq)] pub struct StateTmpfs(PathBuf);
 
 impl SystemExecutable {
+    pub fn from_resolved(target: &ResolvedTarget) -> Result<Self, String> {
+        let path = &target.executable;
+        if !path.is_absolute() || path.components().any(|c| matches!(c, Component::ParentDir | Component::CurDir)) {
+            return Err(format!("target executable must be absolute and normalized: {}", path.display()));
+        }
+        let metadata = fs::symlink_metadata(path).map_err(|e| format!("stat {}: {e}", path.display()))?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() || metadata.permissions().mode() & 0o111 == 0 {
+            return Err(format!("not a regular executable: {}", path.display()));
+        }
+        Ok(Self(path.clone()))
+    }
+    #[cfg(test)]
     pub fn validate(path: impl AsRef<Path>) -> Result<Self, String> {
         let path = path.as_ref();
         if !path.is_absolute() || path.components().any(|c| matches!(c, Component::ParentDir | Component::CurDir)) {
@@ -53,6 +66,7 @@ impl WrapperAsset {
 impl MountTmpfs { pub fn new() -> Self { Self(MOUNTS_ROOT.into()) } pub fn path(&self) -> &Path { &self.0 } }
 impl StateTmpfs { pub fn new() -> Self { Self(STATE_ROOT.into()) } pub fn path(&self) -> &Path { &self.0 } }
 
+#[cfg(test)]
 pub fn is_blacklisted(name: &str) -> bool {
     matches!(name, "powerd" | "sshd" | "dbus-daemon" | "dbus" | "otav3" | "otaupd" | "mmcqd" | "wpa_supplicant" | "dhcpd")
 }

@@ -1,6 +1,10 @@
 {
+  "manifest_version": 2,
   "id": "com.bd452.ksubstrateprobe",
   "name": "KSubstrate Inheritance Probe",
   "description": "Diagnostic tweak that logs every process it loads into, to verify LD_PRELOAD inheritance (A§6.4).",
-  "version": [0, 1, 0]
+  "version": [0, 1, 0],
+  "library": "tweak.so",
+  "initialization": "constructor",
+  "targets": ["pillow"]
 }

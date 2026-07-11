@@ -11,4 +11,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 ksubstrate = { path = "../ksubstrate" }
+ksubstrate-targets = { path = "../ksubstrate-targets" }
 libc.workspace = true

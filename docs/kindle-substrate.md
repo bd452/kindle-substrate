@@ -97,7 +97,6 @@ package/
   tweaks/
     com.bd452.ksubstratedemo/
       tweak.so
-      tweak.ksfilter
       manifest.json
 ```
 
@@ -109,40 +108,39 @@ hook** on `compute` via `kh_hook_function` before `main` runs. The target then
 prints and writes the hooked value. This exercises the actual hooking engine
 (not a cooperative dispatch table) while staying self-contained and recoverable.
 
-Because `/proc/<pid>/comm` is truncated to 15 bytes, the bootstrap matches a
-filter token against the truncated comm as well as the full name, so a filter
-naming `ksubstrate-demo-target` matches the process seen as `ksubstrate-demo`.
+The demo manifest explicitly names its KPM executable target. The CLI creates
+a one-shot launch plan for that target, so the demo remains self-contained
+without relying on process-name matching.
 
 ## Runtime Model
 
 Kindle Substrate is session-scoped. A hard reboot always returns to stock
-behavior because the daemon lifetime is the hooked session.
+behavior because bind mounts and state tmpfs are the hooked session.
 
 ```text
 CLEAN boot
   user opens Enable Tweaks launcher
-  ksubstrated starts
-  daemon installs session wrappers for spawn roots
-  daemon soft-restarts the framework to the home UI
+  ksubstrated controller installs a complete target set and exits
+  controller soft-restarts required profiled framework roots
   wrapped processes exec with LD_PRELOAD=libksubstrate-bootstrap.so
-  bootstrap matches .ksfilter files and dlopens tweaks
+  bootstrap verifies target identity and loads the committed plan entries
 HOOKED session
-  user opens Disable Tweaks launcher, daemon crash guard trips, or device reboots
-  daemon removes wrappers and restarts framework stock
+  user opens Disable Tweaks launcher or device reboots
+  controller removes wrappers and restarts framework stock
 CLEAN again
 ```
 
 Design invariants:
 
 - Hard reboot is a clean boot.
-- Daemon lifetime is the session; no persistent session flag files.
+- No userspace daemon owns the session; verified mounts plus a committed tmpfs
+  session plan define active state.
 - Enable means restart the UI into a known home-screen state, not live PID
   injection. Both the `enable` launcher and the default KPM launch (`toggle`)
   install session wrappers.
 - Hooks are installed at process exec by `LD_PRELOAD`, not by global
   `/etc/ld.so.preload`.
-- Default spawn roots are Kindle UI roots such as `pillow`, `appmgrd`, and the
-  home booklet host. Tweak filters can add firmware-resolved roots.
+- Targets are explicit manifest-v2 built-ins or opted-in KPM executable paths.
 - `powerd`, `sshd`, `dbus`, OTA, storage, and networking core remain blacklisted
   from default wrapping.
 
@@ -232,29 +230,25 @@ entire region under consideration is verified before Dobby patches.
 `libksubstrate-bootstrap.so` is loaded by the dynamic linker. Its constructor:
 
 1. Checks `/mnt/us/DISABLE_KSUBSTRATE`.
-2. Reads `/proc/self/comm`.
-3. Scans installed tweaks for matching `.ksfilter` files.
-4. `dlopen`s matching tweak libraries.
+2. Verifies the wrapper-supplied target and original-alias identity.
+3. Reads the committed session or one-shot launch plan.
+4. `dlopen`s only the plan-listed tweak libraries.
 5. Fails closed per tweak without aborting the host process.
 
-`ksubstrated` owns the hooked session:
+`ksubstrated` is a short-lived transactional controller:
 
-1. Computes spawn roots from built-in UI roots plus roots named by installed
-   tweak filters (each filter comm name is resolved against the system bin
-   directories). Filter-derived roots that name recovery-critical processes
-   (`powerd`, `sshd`, `dbus*`, OTA/storage/networking core) are refused.
+1. Validates manifest-v2 registry entries, resolves explicit profile/KPM
+   targets, and rejects recovery-critical targets.
 2. Wraps each root with a **volatile bind mount**: the real binary is bind-mounted
    to a stable path under the session dir, then the original path is shadowed by
    a wrapper that re-execs under `LD_PRELOAD`. Nothing on the rootfs is modified;
    a reboot drops the mounts (A§14.1). The wrapped set is recorded to
    the tmpfs journal. If any wrap fails, every root wrapped so far is rolled
    back so a UI root is never left missing.
-3. Restarts the framework into the home UI.
-4. Guards against crash loops by watching UI-process health (falling edges of
-   `pillow`/`appmgrd` uptime) in addition to monitor restarts; if
-   `CRASH_THRESHOLD` (3) deaths land within `CRASH_WINDOW_SECS` (120s), the
-   session returns to stock instead of re-arming.
-5. On disable or exit, unmounts the wrappers and restarts stock UI, restoring
+3. Publishes a committed session plan and restarts required profiled framework
+   classes after mount installation.
+4. On disable, reframe failure, or recovery, unmounts wrappers and restarts
+   stock UI, restoring
    exactly the roots in the tmpfs journal. A reboot is still clean even if the
    manifest is missing, because the mounts are volatile.
 
