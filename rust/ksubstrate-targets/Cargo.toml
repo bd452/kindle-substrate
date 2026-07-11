@@ -8,3 +8,4 @@ description = "Explicit target, manifest-v2, and session-plan types for Kindle S
 
 [dependencies]
 libc.workspace = true
+serde_json.workspace = true

@@ -24,6 +24,7 @@ license = "MIT"
 
 [workspace.dependencies]
 libc = "0.2"
+serde_json = "1"
 
 [profile.release]
 opt-level = "z"

@@ -6,6 +6,7 @@
 //! swap the pointer. No inline prologue patch is involved.
 
 use crate::HookError;
+use std::ffi::CString;
 use std::fs;
 use std::os::raw::c_void;
 use std::path::Path;
@@ -29,62 +30,229 @@ const R_ARM_JUMP_SLOT: u32 = 22;
 const R_X86_64_JUMP_SLOT: u32 = 7;
 const R_AARCH64_JUMP_SLOT: u32 = 1026;
 
-/// Replace every jump-slot GOT entry for `symbol` in `image` (or every loaded
-/// image when `image` is None). Returns the first original pointer through
-/// `original` when provided.
-pub fn hook_import(
-    image: Option<&str>,
-    symbol: &str,
-    replacement: *mut c_void,
-    original: *mut *mut c_void,
-) -> Result<(), HookError> {
-    if symbol.is_empty() || replacement.is_null() {
-        return Err(HookError::InvalidArgument);
-    }
+/// Physical import interception is deliberately image-specific.  A global
+/// request can have heterogeneous loader resolutions and cannot truthfully
+/// produce one `original` continuation.
+pub struct ImportDiscovery {
+    slots: Vec<*mut *mut c_void>,
+    pub true_original: *mut c_void,
+}
+pub struct ImportPhysical {
+    slots: Vec<*mut *mut c_void>,
+}
+unsafe impl Send for ImportPhysical {}
 
+pub fn image_identity(image: &str) -> Result<String, HookError> {
     let maps = fs::read_to_string("/proc/self/maps").map_err(|_| HookError::System)?;
-    let modules = loaded_modules(&maps);
-    if modules.is_empty() {
-        return Err(HookError::System);
-    }
-
-    let mut hooked = false;
-    let mut first_orig: *mut c_void = std::ptr::null_mut();
-
-    for module in &modules {
-        if let Some(wanted) = image {
-            let matches = module.path == wanted
+    // Callers commonly use /proc/self/exe.  The pathname in maps is the
+    // resolved executable path, so compare canonical paths as well as the
+    // literal and basename forms.
+    let requested = std::fs::canonicalize(image).ok();
+    let module = loaded_modules(&maps)
+        .into_iter()
+        .find(|module| {
+            module.path == image
+                || requested
+                    .as_ref()
+                    .map(|path| path == Path::new(&module.path))
+                    .unwrap_or(false)
                 || Path::new(&module.path)
                     .file_name()
-                    .map(|name| name == wanted)
-                    .unwrap_or(false);
-            if !matches {
-                continue;
-            }
-        }
+                    .map(|name| name == image)
+                    .unwrap_or(false)
+        })
+        .ok_or(HookError::System)?;
+    Ok(format!(
+        "{}@{:x}",
+        std::fs::canonicalize(&module.path)
+            .unwrap_or_else(|_| module.path.into())
+            .display(),
+        module.base
+    ))
+}
 
-        match hook_module(&module.path, module.base, symbol, replacement) {
-            Ok(origs) if !origs.is_empty() => {
-                if first_orig.is_null() {
-                    first_orig = origs[0];
-                }
-                hooked = true;
-                if image.is_some() {
-                    break;
-                }
-            }
-            Ok(_) => {}
-            Err(HookError::System) | Err(HookError::InvalidArgument) => {}
-            Err(error) => return Err(error),
-        }
-    }
-
-    if !hooked {
+pub fn discover_import(identity: &str, symbol: &str) -> Result<ImportDiscovery, HookError> {
+    let (path, base) = identity
+        .rsplit_once('@')
+        .and_then(|(path, base)| {
+            usize::from_str_radix(base, 16)
+                .ok()
+                .map(|base| (path, base))
+        })
+        .ok_or(HookError::InvalidArgument)?;
+    let bytes = fs::read(path).map_err(|_| HookError::System)?;
+    let slots = jump_slot_addresses(&bytes, base, symbol)?;
+    if slots.is_empty() {
         return Err(HookError::System);
     }
-    if !original.is_null() {
+    // Never use a jump-slot's current contents as the continuation: before
+    // lazy binding it points into the PLT resolver, which will later overwrite
+    // our permanent chain.  dlsym gives us the loader-resolved implementation
+    // without invoking an unknown-signature import.
+    let true_original = resolve_import_symbol(path, symbol)?;
+    if true_original.is_null() {
+        return Err(HookError::System);
+    }
+    // Slots for one symbol in one image must all be replaced as one unit. They
+    // need not have equal current values: lazy and eager slots legitimately
+    // differ before this interception is installed.
+    if slots.iter().any(|slot| slot.is_null()) {
+        return Err(HookError::IncompatibleImportTargets);
+    }
+    Ok(ImportDiscovery {
+        slots,
+        true_original,
+    })
+}
+
+pub fn install_import_physical(
+    discovery: ImportDiscovery,
+    replacement: *mut c_void,
+) -> Result<ImportPhysical, HookError> {
+    let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+    if page_size <= 0 {
+        return Err(HookError::System);
+    }
+    let page_size = page_size as usize;
+    let mut pages: Vec<(usize, i32)> = Vec::new();
+    for slot in &discovery.slots {
+        let page = *slot as usize & !(page_size - 1);
+        if !pages.iter().any(|(known, _)| *known == page) {
+            pages.push((page, page_protection(page)?));
+        }
+    }
+    for (page, protection) in &pages {
+        if unsafe {
+            libc::mprotect(
+                *page as *mut c_void,
+                page_size,
+                *protection | libc::PROT_WRITE,
+            )
+        } != 0
+        {
+            let _ = restore_pages(&pages, page_size);
+            return Err(HookError::System);
+        }
+    }
+    let old: Vec<*mut c_void> = discovery
+        .slots
+        .iter()
+        .map(|slot| unsafe { **slot })
+        .collect();
+    for slot in &discovery.slots {
         unsafe {
-            *original = first_orig;
+            **slot = replacement;
+        }
+    }
+    if restore_pages(&pages, page_size).is_err() {
+        // Some pages may already be back to their original read-only state.
+        // Re-open all of them before rollback; writing first would fault on a
+        // RELRO page and leave an unreported half-installed hook.
+        let reopen = make_pages_writable(&pages, page_size);
+        if reopen.is_ok() {
+            for (slot, value) in discovery.slots.iter().zip(old) {
+                unsafe {
+                    **slot = value;
+                }
+            }
+            let _ = restore_pages(&pages, page_size);
+        }
+        return Err(HookError::System);
+    }
+    Ok(ImportPhysical {
+        slots: discovery.slots,
+    })
+}
+
+/// Resolve the implementation selected for an import without reading the
+/// mutable GOT. `RTLD_NOLOAD` retains the target's own loader scope when the
+/// platform supports it. Main executables cannot always be re-opened, so the
+/// process scope is the compatible fallback for that case.
+fn resolve_import_symbol(image: &str, symbol: &str) -> Result<*mut c_void, HookError> {
+    let image = CString::new(image).map_err(|_| HookError::InvalidArgument)?;
+    let symbol = CString::new(symbol).map_err(|_| HookError::InvalidArgument)?;
+    // RTLD_NOLOAD is Linux/glibc/uClibc's value. Kindle's loader accepts it;
+    // the fallback below also covers loaders that do not.
+    const RTLD_NOLOAD: i32 = 0x0004;
+    unsafe {
+        let handle = libc::dlopen(
+            image.as_ptr(),
+            libc::RTLD_LAZY | libc::RTLD_LOCAL | RTLD_NOLOAD,
+        );
+        if !handle.is_null() {
+            let resolved = libc::dlsym(handle, symbol.as_ptr()).cast::<c_void>();
+            libc::dlclose(handle);
+            if !resolved.is_null() {
+                return Ok(resolved);
+            }
+        }
+
+        let process = libc::dlopen(std::ptr::null(), libc::RTLD_LAZY | libc::RTLD_LOCAL);
+        if process.is_null() {
+            return Err(HookError::System);
+        }
+        let resolved = libc::dlsym(process, symbol.as_ptr()).cast::<c_void>();
+        libc::dlclose(process);
+        if resolved.is_null() {
+            Err(HookError::System)
+        } else {
+            Ok(resolved)
+        }
+    }
+}
+
+fn make_pages_writable(pages: &[(usize, i32)], size: usize) -> Result<(), HookError> {
+    for (page, protection) in pages {
+        if unsafe {
+            libc::mprotect(
+                *page as *mut c_void,
+                size,
+                *protection | libc::PROT_WRITE,
+            )
+        } != 0
+        {
+            return Err(HookError::System);
+        }
+    }
+    Ok(())
+}
+
+fn page_protection(page: usize) -> Result<i32, HookError> {
+    let maps = fs::read_to_string("/proc/self/maps").map_err(|_| HookError::System)?;
+    for line in maps.lines() {
+        let mut parts = line.split_whitespace();
+        let Some(range) = parts.next() else { continue };
+        let perms = parts.next().unwrap_or("");
+        let Some((start, end)) = range.split_once('-') else {
+            continue;
+        };
+        let (Ok(start), Ok(end)) = (
+            usize::from_str_radix(start, 16),
+            usize::from_str_radix(end, 16),
+        ) else {
+            continue;
+        };
+        if page >= start && page < end {
+            let mut p = 0;
+            let b = perms.as_bytes();
+            if b.first() == Some(&b'r') {
+                p |= libc::PROT_READ
+            };
+            if b.get(1) == Some(&b'w') {
+                p |= libc::PROT_WRITE
+            };
+            if b.get(2) == Some(&b'x') {
+                p |= libc::PROT_EXEC
+            };
+            return Ok(p);
+        }
+    }
+    Err(HookError::System)
+}
+fn restore_pages(pages: &[(usize, i32)], size: usize) -> Result<(), HookError> {
+    for (page, protection) in pages {
+        if unsafe { libc::mprotect(*page as *mut c_void, size, *protection) } != 0 {
+            return Err(HookError::System);
         }
     }
     Ok(())
@@ -131,50 +299,6 @@ fn loaded_modules(maps: &str) -> Vec<LoadedModule> {
         }
     }
     out
-}
-
-fn hook_module(
-    path: &str,
-    mapped_base: usize,
-    symbol: &str,
-    replacement: *mut c_void,
-) -> Result<Vec<*mut c_void>, HookError> {
-    let bytes = fs::read(path).map_err(|_| HookError::System)?;
-    let slots = jump_slot_addresses(&bytes, mapped_base, symbol)?;
-    if slots.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let mut originals = Vec::with_capacity(slots.len());
-    for slot in slots {
-        let orig = unsafe { rewrite_got_entry(slot, replacement)? };
-        originals.push(orig);
-    }
-    Ok(originals)
-}
-
-unsafe fn rewrite_got_entry(
-    slot: *mut *mut c_void,
-    replacement: *mut c_void,
-) -> Result<*mut c_void, HookError> {
-    let page_size = libc::sysconf(libc::_SC_PAGESIZE);
-    if page_size <= 0 {
-        return Err(HookError::System);
-    }
-    let page_size = page_size as usize;
-    let addr = slot as usize;
-    let page = addr & !(page_size - 1);
-    if libc::mprotect(
-        page as *mut c_void,
-        page_size,
-        libc::PROT_READ | libc::PROT_WRITE,
-    ) != 0
-    {
-        return Err(HookError::System);
-    }
-    let original = *slot;
-    *slot = replacement;
-    Ok(original)
 }
 
 /// Locate GOT entry addresses for `symbol`'s jump slots in an ELF image.
@@ -224,14 +348,7 @@ fn jump_slots_elf32(
     if jmprel != 0 && pltrelsz != 0 {
         let jmprel_off = vaddr_to_offset32(bytes, e_phoff, e_phentsize, e_phnum, jmprel)?;
         collect_slots32(
-            bytes,
-            jmprel_off,
-            pltrelsz,
-            pltrel,
-            symtab_off,
-            strtab_off,
-            load_bias,
-            symbol,
+            bytes, jmprel_off, pltrelsz, pltrel, symtab_off, strtab_off, load_bias, symbol,
             &mut slots,
         )?;
     }
@@ -269,14 +386,7 @@ fn jump_slots_elf64(
     if jmprel != 0 && pltrelsz != 0 {
         let jmprel_off = vaddr_to_offset64(bytes, e_phoff, e_phentsize, e_phnum, jmprel)?;
         collect_slots64(
-            bytes,
-            jmprel_off,
-            pltrelsz,
-            pltrel,
-            symtab_off,
-            strtab_off,
-            load_bias,
-            symbol,
+            bytes, jmprel_off, pltrelsz, pltrel, symtab_off, strtab_off, load_bias, symbol,
             &mut slots,
         )?;
     }
@@ -513,23 +623,17 @@ fn read_cstr(bytes: &[u8], off: usize) -> Result<&str, HookError> {
 }
 
 fn read_u16(bytes: &[u8], off: usize) -> Result<u16, HookError> {
-    let slice = bytes
-        .get(off..off + 2)
-        .ok_or(HookError::InvalidArgument)?;
+    let slice = bytes.get(off..off + 2).ok_or(HookError::InvalidArgument)?;
     Ok(u16::from_le_bytes([slice[0], slice[1]]))
 }
 
 fn read_u32(bytes: &[u8], off: usize) -> Result<u32, HookError> {
-    let slice = bytes
-        .get(off..off + 4)
-        .ok_or(HookError::InvalidArgument)?;
+    let slice = bytes.get(off..off + 4).ok_or(HookError::InvalidArgument)?;
     Ok(u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]))
 }
 
 fn read_u64(bytes: &[u8], off: usize) -> Result<u64, HookError> {
-    let slice = bytes
-        .get(off..off + 8)
-        .ok_or(HookError::InvalidArgument)?;
+    let slice = bytes.get(off..off + 8).ok_or(HookError::InvalidArgument)?;
     Ok(u64::from_le_bytes([
         slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7],
     ]))
@@ -561,6 +665,14 @@ mod tests {
         assert_eq!(modules[1].base, 0x0004_0000);
     }
 
+    #[test]
+    fn resolves_an_import_without_using_a_jump_slot_value() {
+        // The main executable cannot necessarily be dlopen'ed on every
+        // loader, which exercises the process-scope fallback used for it.
+        let resolved = resolve_import_symbol("/proc/self/exe", "malloc").unwrap();
+        assert!(!resolved.is_null());
+    }
+
     /// Minimal ELF32 ET_DYN with one JUMP_SLOT for `open`.
     #[test]
     fn finds_arm_jump_slot_in_synthetic_elf() {
@@ -579,7 +691,7 @@ mod tests {
         elf[EI_CLASS] = ELFCLASS32;
         elf[5] = 1; // ELFDATA2LSB
         elf[6] = 1; // EV_CURRENT
-        // e_type ET_DYN, e_machine EM_ARM
+                    // e_type ET_DYN, e_machine EM_ARM
         elf[16..18].copy_from_slice(&ET_DYN.to_le_bytes());
         elf[18..20].copy_from_slice(&40u16.to_le_bytes());
         // e_phoff=0x34, e_ehsize=52, e_phentsize=32, e_phnum=2
@@ -620,7 +732,15 @@ mod tests {
         assert_eq!(slots[0] as usize, mapped_base + 0x200);
     }
 
-    fn write_phdr32(buf: &mut [u8], at: usize, p_type: u32, offset: u32, vaddr: u32, filesz: u32, memsz: u32) {
+    fn write_phdr32(
+        buf: &mut [u8],
+        at: usize,
+        p_type: u32,
+        offset: u32,
+        vaddr: u32,
+        filesz: u32,
+        memsz: u32,
+    ) {
         buf[at..at + 4].copy_from_slice(&p_type.to_le_bytes());
         buf[at + 4..at + 8].copy_from_slice(&offset.to_le_bytes());
         buf[at + 8..at + 12].copy_from_slice(&vaddr.to_le_bytes());

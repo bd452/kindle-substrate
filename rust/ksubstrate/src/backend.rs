@@ -1,147 +1,136 @@
+//! The one-time physical Dobby installer.  Logical chaining lives in `chain`.
 use crate::HookError;
-use std::collections::BTreeMap;
 use std::os::raw::c_void;
-use std::sync::{Mutex, OnceLock};
 
-#[cfg(all(target_os = "linux", target_arch = "arm"))]
-use dobby::InlineHook;
-
-#[cfg(not(all(target_os = "linux", target_arch = "arm")))]
-use mock::InlineHook;
-
-/// Bytes a checked hook must verify before patching. Dobby chooses the real
-/// (variable) window itself, but callers still describe at least this much
-/// prologue so the checked entrypoint can refuse a drifted signature.
 pub const PATCH_LEN: usize = 8;
-
-static INLINE_HOOKS: OnceLock<Mutex<BTreeMap<usize, InlineHook>>> = OnceLock::new();
-
-fn hooks() -> &'static Mutex<BTreeMap<usize, InlineHook>> {
-    INLINE_HOOKS.get_or_init(|| Mutex::new(BTreeMap::new()))
+pub struct InlinePhysical {
+    pub(crate) relocated_original: *mut c_void,
+    hook: InlineHook,
 }
-
-pub fn hook_function(
-    target: *mut c_void,
-    replacement: *mut c_void,
-    original: *mut *mut c_void,
-) -> Result<(), HookError> {
-    if target.is_null() || replacement.is_null() {
-        return Err(HookError::InvalidArgument);
-    }
-
-    let mut hooks = hooks().lock().map_err(|_| HookError::Poisoned)?;
-    let key = InlineHook::key(target);
-    if hooks.contains_key(&key) {
-        return Err(HookError::AlreadyHooked);
-    }
-    let hook = unsafe { InlineHook::install(target, replacement, original)? };
-    hooks.insert(key, hook);
-    Ok(())
-}
+unsafe impl Send for InlinePhysical {}
 
 pub fn code_address(target: *mut c_void) -> usize {
     InlineHook::key(target)
 }
 
-pub fn unhook_function(target: *mut c_void) -> Result<(), HookError> {
+fn validate_target_mode(target: *mut c_void) -> Result<usize, HookError> {
     if target.is_null() {
         return Err(HookError::InvalidArgument);
     }
+    let raw = target as usize;
+    #[cfg(target_arch = "arm")]
+    {
+        let thumb = raw & 1 != 0;
+        let code = raw & !1;
+        // A32 instructions are word-aligned, while Thumb instructions are
+        // halfword-aligned and select state through bit zero.
+        if (thumb && code & 1 != 0) || (!thumb && code & 3 != 0) {
+            return Err(HookError::InvalidTargetMode);
+        }
+        return Ok(code);
+    }
+    #[cfg(not(target_arch = "arm"))]
+    Ok(raw)
+}
 
-    let mut hooks = hooks().lock().map_err(|_| HookError::Poisoned)?;
-    let key = InlineHook::key(target);
-    let Some(mut hook) = hooks.remove(&key) else {
-        return Err(HookError::NotHooked);
-    };
-    unsafe { hook.uninstall() }
+/// Reject null, mis-tagged, or non-executable replacement entries before they
+/// can become a chain head.  This is intentionally separate from prologue
+/// validation: a replacement needs no readable bytes, only executable code.
+pub fn validate_replacement(replacement: *mut c_void) -> Result<(), HookError> {
+    let addr = validate_target_mode(replacement)?;
+    #[cfg(not(target_os = "linux"))]
+    let _ = addr;
+    #[cfg(target_os = "linux")]
+    {
+        let maps = std::fs::read_to_string("/proc/self/maps").map_err(|_| HookError::System)?;
+        let executable = maps.lines().any(|line| {
+            let mut fields = line.split_whitespace();
+            let range = fields.next().unwrap_or("");
+            let perms = fields.next().unwrap_or("");
+            let Some((start, end)) = range.split_once('-') else { return false; };
+            let (Ok(start), Ok(end)) = (usize::from_str_radix(start, 16), usize::from_str_radix(end, 16)) else { return false; };
+            perms.as_bytes().get(2) == Some(&b'x') && addr >= start && addr < end
+        });
+        if !executable { return Err(HookError::InvalidTargetMode); }
+    }
+    Ok(())
+}
+
+pub fn snapshot_prologue(target: *mut c_void, len: usize) -> Result<Vec<u8>, HookError> {
+    let addr = validate_target_mode(target)?;
+    // The caller limits this to a small fixed signature window.  The mapping
+    // check prevents a signature read from crossing into an unmapped page.
+    #[cfg(not(target_os = "linux"))]
+    {
+        return Ok(unsafe { std::slice::from_raw_parts(addr as *const u8, len).to_vec() });
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let maps = std::fs::read_to_string("/proc/self/maps").map_err(|_| HookError::System)?;
+        let executable = maps.lines().any(|line| {
+        let mut fields = line.split_whitespace(); let range = fields.next().unwrap_or(""); let perms = fields.next().unwrap_or("");
+        let Some((start,end)) = range.split_once('-') else { return false; };
+        let start = usize::from_str_radix(start,16).ok(); let end = usize::from_str_radix(end,16).ok();
+        matches!((start,end), (Some(start),Some(end)) if perms.as_bytes().get(0)==Some(&b'r') && perms.as_bytes().get(2)==Some(&b'x') && addr >= start && addr.checked_add(len).map(|v| v <= end).unwrap_or(false))
+    });
+        if !executable {
+            return Err(HookError::InvalidArgument);
+        }
+        Ok(unsafe { std::slice::from_raw_parts(addr as *const u8, len).to_vec() })
+    }
+}
+
+pub unsafe fn install_inline_physical(
+    target: *mut c_void,
+    head: *mut c_void,
+) -> Result<InlinePhysical, HookError> {
+    let mut original = std::ptr::null_mut();
+    let hook = unsafe { InlineHook::install(target, head, &mut original)? };
+    Ok(InlinePhysical {
+        relocated_original: original,
+        hook,
+    })
 }
 
 #[cfg(not(all(target_os = "linux", target_arch = "arm")))]
-mod mock {
-    use crate::HookError;
-    use std::os::raw::c_void;
-
-    pub struct InlineHook {
-        target: usize,
-        replacement: usize,
+struct InlineHook;
+#[cfg(not(all(target_os = "linux", target_arch = "arm")))]
+impl InlineHook {
+    fn key(target: *mut c_void) -> usize {
+        target as usize & !1
     }
-
-    impl InlineHook {
-        pub fn key(target: *mut c_void) -> usize {
-            target as usize
+    unsafe fn install(
+        target: *mut c_void,
+        _head: *mut c_void,
+        original: *mut *mut c_void,
+    ) -> Result<Self, HookError> {
+        unsafe {
+            *original = target;
         }
-
-        pub unsafe fn install(
-            target: *mut c_void,
-            replacement: *mut c_void,
-            original: *mut *mut c_void,
-        ) -> Result<Self, HookError> {
-            if !original.is_null() {
-                unsafe {
-                    *original = target;
-                }
-            }
-            Ok(Self {
-                target: target as usize,
-                replacement: replacement as usize,
-            })
-        }
-
-        pub unsafe fn uninstall(&mut self) -> Result<(), HookError> {
-            let _ = (self.target, self.replacement);
-            Ok(())
-        }
+        Ok(Self)
     }
 }
 
-// On-device inline hooking is delegated to the vendored Dobby engine, which
-// relocates ARM/Thumb-2 prologues, allocates trampolines, and handles branch
-// veneers and cache flushing. We keep only a thin ownership map here so the ABI
-// can refuse double-hooks and support unhook/destroy.
 #[cfg(all(target_os = "linux", target_arch = "arm"))]
-mod dobby {
-    use crate::HookError;
-    use std::os::raw::c_void;
-    use std::ptr;
-
-    pub struct InlineHook {
-        addr: *mut c_void,
-    }
-
-    impl InlineHook {
-        pub fn key(target: *mut c_void) -> usize {
-            // Normalize the Thumb bit so a target identifies one hook.
-            (target as usize) & !1
-        }
-
-        pub unsafe fn install(
-            target: *mut c_void,
-            replacement: *mut c_void,
-            original: *mut *mut c_void,
-        ) -> Result<Self, HookError> {
-            let mut local: *mut c_void = ptr::null_mut();
-            let out = if original.is_null() {
-                &mut local as *mut *mut c_void
-            } else {
-                original
-            };
-            let rc = unsafe { dobby_sys::DobbyHook(target, replacement, out) };
-            if rc == 0 {
-                Ok(Self { addr: target })
-            } else {
-                Err(HookError::System)
-            }
-        }
-
-        pub unsafe fn uninstall(&mut self) -> Result<(), HookError> {
-            let rc = unsafe { dobby_sys::DobbyDestroy(self.addr) };
-            if rc == 0 {
-                Ok(())
-            } else {
-                Err(HookError::System)
-            }
-        }
-    }
-
-    unsafe impl Send for InlineHook {}
+struct InlineHook {
+    addr: *mut c_void,
 }
+#[cfg(all(target_os = "linux", target_arch = "arm"))]
+impl InlineHook {
+    fn key(target: *mut c_void) -> usize {
+        target as usize & !1
+    }
+    unsafe fn install(
+        target: *mut c_void,
+        head: *mut c_void,
+        original: *mut *mut c_void,
+    ) -> Result<Self, HookError> {
+        if unsafe { dobby_sys::DobbyHook(target, head, original) } == 0 {
+            Ok(Self { addr: target })
+        } else {
+            Err(HookError::System)
+        }
+    }
+}
+#[cfg(all(target_os = "linux", target_arch = "arm"))]
+unsafe impl Send for InlineHook {}

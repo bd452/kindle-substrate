@@ -66,8 +66,11 @@ extern "C" fn replacement_write(fd: c_int, buf: *const c_void, count: usize) -> 
 fn install_got_hook() {
     unsafe {
         let mut original: *mut c_void = std::ptr::null_mut();
+        // Import hooks are deliberately scoped to one loaded image.  The demo
+        // process is this executable; image_identity canonicalizes this alias
+        // before matching it against /proc/self/maps.
         let status = kh_hook_import(
-            std::ptr::null(),
+            b"/proc/self/exe\0".as_ptr().cast(),
             b"write\0".as_ptr().cast(),
             replacement_write as *mut c_void,
             &mut original,

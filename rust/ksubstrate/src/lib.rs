@@ -1,5 +1,7 @@
 mod backend;
+mod chain;
 mod plt;
+mod thunk;
 
 use std::collections::BTreeMap;
 use std::ffi::{CStr, CString};
@@ -151,7 +153,7 @@ pub fn record_raw_hook(
     replacement: *mut c_void,
     original: *mut *mut c_void,
 ) -> Result<(), HookError> {
-    backend::hook_function(target, replacement, original)
+    unsafe { chain::hook_inline(target, replacement, original, None) }
 }
 
 pub unsafe fn record_raw_hook_checked(
@@ -171,18 +173,14 @@ pub unsafe fn record_raw_hook_checked(
         return Err(HookError::InvalidArgument);
     }
 
-    let code_addr = backend::code_address(target);
-    let actual = unsafe { std::slice::from_raw_parts(code_addr as *const u8, expected_len) };
-    let expected = unsafe { std::slice::from_raw_parts(expected_prologue.cast::<u8>(), expected_len) };
-    if actual != expected {
-        return Err(HookError::PrologueMismatch);
-    }
-
-    record_raw_hook(target, replacement, original)
+    let expected =
+        unsafe { std::slice::from_raw_parts(expected_prologue.cast::<u8>(), expected_len) };
+    unsafe { chain::hook_inline(target, replacement, original, Some(expected)) }
 }
 
 pub fn unhook_raw(target: *mut c_void) -> Result<(), HookError> {
-    backend::unhook_function(target)
+    let _ = target;
+    Err(HookError::Unsupported)
 }
 
 /// PLT/GOT hook: replace an imported symbol's jump-slot GOT entry in `image`
@@ -196,16 +194,21 @@ pub fn hook_import(
     replacement: *mut c_void,
     original: *mut *mut c_void,
 ) -> Result<(), HookError> {
-    plt::hook_import(image, symbol, replacement, original)
+    chain::hook_import(image, symbol, replacement, original)
 }
 
 pub fn log(message: &str) {
     // Runtime calls receive a state-tmpfs destination.  Do not create a
     // fallback file when launched outside a session.
     if let Ok(path) = std::env::var("KSUBSTRATE_LOG") {
-        let _ = OpenOptions::new().create(true).append(true).open(path)
+        let _ = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
             .and_then(|mut file| writeln!(file, "{message}"));
-    } else { eprintln!("ksubstrate: {message}"); }
+    } else {
+        eprintln!("ksubstrate: {message}");
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -219,6 +222,11 @@ pub enum HookError {
     AlreadyHooked = -6,
     NotHooked = -7,
     PrologueMismatch = -8,
+    InvalidTargetMode = -9,
+    ThunkAllocationFailed = -10,
+    IncompatibleImportTargets = -11,
+    SignatureTooLong = -12,
+    InstallationConflict = -13,
 }
 
 fn c_string<'a>(value: *const c_char) -> Result<&'a str, HookError> {
@@ -243,7 +251,9 @@ pub extern "C" fn kh_hook_function(
     replacement: *mut c_void,
     original: *mut *mut c_void,
 ) -> c_int {
-    match catch_unwind(AssertUnwindSafe(|| record_raw_hook(target, replacement, original))) {
+    match catch_unwind(AssertUnwindSafe(|| {
+        record_raw_hook(target, replacement, original)
+    })) {
         Ok(result) => ffi_status(result),
         Err(_) => HookError::Panic as c_int,
     }
@@ -258,7 +268,13 @@ pub extern "C" fn kh_hook_function_checked(
     expected_len: usize,
 ) -> c_int {
     match catch_unwind(AssertUnwindSafe(|| unsafe {
-        record_raw_hook_checked(target, replacement, original, expected_prologue, expected_len)
+        record_raw_hook_checked(
+            target,
+            replacement,
+            original,
+            expected_prologue,
+            expected_len,
+        )
     })) {
         Ok(result) => ffi_status(result),
         Err(_) => HookError::Panic as c_int,
@@ -401,7 +417,10 @@ mod tests {
 00020000-00030000 r--p 00010000 fe:01 100  /usr/bin/reader\n\
 b6f00000-b6f10000 r-xp 00000000 fe:01 200  /lib/libc.so.6\n";
         assert_eq!(module_base_from_maps(maps, "reader"), Some(0x0001_0000));
-        assert_eq!(module_base_from_maps(maps, "/usr/bin/reader"), Some(0x0001_0000));
+        assert_eq!(
+            module_base_from_maps(maps, "/usr/bin/reader"),
+            Some(0x0001_0000)
+        );
         assert_eq!(module_base_from_maps(maps, "libc.so.6"), Some(0xb6f0_0000));
         assert_eq!(module_base_from_maps(maps, "nonexistent"), None);
     }
@@ -448,7 +467,8 @@ b6f00000-b6f10000 r-xp 00000000 fe:01 200  /lib/libc.so.6\n";
     fn checked_hook_accepts_matching_prologue() {
         let target = original as *mut c_void;
         let code_addr = backend::code_address(target);
-        let expected = unsafe { std::slice::from_raw_parts(code_addr as *const u8, backend::PATCH_LEN) };
+        let expected =
+            unsafe { std::slice::from_raw_parts(code_addr as *const u8, backend::PATCH_LEN) };
         let mut trampoline = ptr::null_mut();
         let result = unsafe {
             record_raw_hook_checked(
@@ -460,7 +480,8 @@ b6f00000-b6f10000 r-xp 00000000 fe:01 200  /lib/libc.so.6\n";
             )
         };
         assert_eq!(result, Ok(()));
-        assert_eq!(trampoline, target);
-        assert_eq!(unhook_raw(target), Ok(()));
+        assert!(!trampoline.is_null());
+        assert_ne!(trampoline, target);
+        assert_eq!(unhook_raw(target), Err(HookError::Unsupported));
     }
 }

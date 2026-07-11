@@ -34,6 +34,20 @@ artifacts in its package index.
 The supported runtime publishing and third-party tweak authoring workflows are
 documented in [`docs/build-and-publish.md`](docs/build-and-publish.md).
 
+## Hook contract
+
+Hooks are append-only for the life of a target process. Repeated registrations
+of an inline target or a specific-image import form one chain: the most recently
+loaded tweak is outermost, and its `original` continuation advances exactly one
+step toward the true implementation. Hook calls make no registry lock or
+signature-aware dispatch. Runtime removal is deliberately unsupported;
+`kh_unhook_function` remains only as a deprecated ABI symbol and returns
+`KH_ERROR_UNSUPPORTED`.
+
+Tweak manifests are validated before any library is loaded. Dependencies load
+before dependents; otherwise enabled tweaks are sorted by ascending `order` and
+then `id`, making constructor registration deterministic.
+
 ## Status
 
 The implementation is experimental. Cross-build and host tests are available,

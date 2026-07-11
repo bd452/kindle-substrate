@@ -10,6 +10,12 @@ extern "C" {
 
 typedef int32_t (*kh_i32_fn_t)(void);
 
+/* Hooks are append-only and remain installed until process exit.  Each new
+ * registration is outermost.  `original`, when non-NULL, receives a callable
+ * ABI-transparent continuation: calling it advances exactly one link down the
+ * chain. Calling the public target starts again at the outermost hook. Keep
+ * this pointer with its exact function-pointer type; it remains valid until
+ * process exit. */
 int kh_hook_function(void *target, void *replacement, void **original);
 /* expected_len must be >= 8 (the prologue patch window); shorter descriptions
  * are rejected so the whole overwritten region is always verified first. */
@@ -20,9 +26,15 @@ int kh_hook_function_checked(
     const void *expected_prologue,
     size_t expected_len
 );
+/* Deprecated ABI compatibility symbol. Runtime removal is unsupported and
+ * this always returns KH_ERROR_UNSUPPORTED (-1). */
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((deprecated("hooks are permanent until process exit")))
+#endif
 int kh_unhook_function(void *target);
-/* PLT/GOT hook: replace an imported symbol's entry (preferred, update-stable).
- * Pass image=NULL to replace in all loaded images. */
+/* PLT/GOT hook with the same append-only chain semantics as inline hooks.
+ * `image` must identify one loaded image; global image=NULL is rejected so an
+ * `original` continuation can never ambiguously represent several imports. */
 int kh_hook_import(const char *image, const char *symbol, void *replacement, void **original);
 void *kh_find_symbol(const char *image, const char *name);
 /* Resolve a firmware-private function by module load base + RVA (from the
