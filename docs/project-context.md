@@ -23,26 +23,17 @@ The initial implementation entered `kinstaller-repo` in commit `b4a1c65`. Before
 the extraction, the complete state was preserved on the local branch
 `codex/ksubstrate-pre-extraction`; its snapshot commit is `8861a48`.
 
-The standalone repository was initialized at:
+The standalone repository's initial import commit is `45e9766`. The import
+includes the previously untracked analysis notes so the standalone project has
+the full working context, not just the files that happened to be committed in
+the parent repository.
 
-```text
-/Users/bryce/projects/kindle-substrate
-```
-
-Its initial import commit is `45e9766`. The import includes the previously
-untracked analysis notes so the standalone project has the full working context,
-not just the files that happened to be committed in the parent repository.
-
-The parent integration path is:
-
-```text
-kinstaller-repo/components/kindle-substrate
-```
-
-The intended GitHub location is `bd452/kindle-substrate`. Public publication is
-deliberately pending explicit approval because it exposes the extracted local
-source. Until that happens, the parent cutover remains staged rather than
-committed against a remote that does not yet exist.
+This repository is the source of truth for Kindle Substrate runtime and
+toolchain work. It is published at
+[`bd452/kindle-substrate`](https://github.com/bd452/kindle-substrate).
+`kinstaller-repo` is expected to consume a pinned submodule commit under
+`components/kindle-substrate` and publish the resulting packages; that parent
+cutover is outside this repository's scope.
 
 ## Product Model
 

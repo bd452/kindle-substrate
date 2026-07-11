@@ -27,7 +27,8 @@ Host tests:
     cargo test --manifest-path rust/Cargo.toml --workspace
 
 The package build writes .kpkg artifacts under each app's dist directory.
-kinstaller-repo consumes this repository as a submodule and publishes those
+This repository is the source of truth for the runtime and toolchain;
+`kinstaller-repo` can consume a pinned commit as a submodule and publish those
 artifacts in its package index.
 
 ## Status
@@ -36,5 +37,5 @@ The implementation is experimental. Cross-build and host tests are available,
 but inline hooking, GOT rewriting, framework wrappers, and recovery still
 require validation across the supported Kindle firmware/device matrix.
 
-The implementation was extracted from bd452/kinstaller-repo at commit
-b4a1c65.
+The implementation was extracted from `bd452/kinstaller-repo` at commit
+`b4a1c65`.

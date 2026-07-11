@@ -289,16 +289,17 @@ proposals, and human-promoted overrides. That extraction is not yet built — th
 symbol DB is authored by hand today. Runtime inline hooks must still verify
 prologue signatures because firmware-specific RVAs can drift.
 
-## Integration Plan For This Repo
+## Build Plan For This Repo
 
 1. Build `apps/com.bd452.ksubstrate` first; it stages the runtime libraries,
    daemon, CLI, and header.
 2. Build `apps/com.bd452.ksubstratedemo` second; it links the demo target and
    sample tweak against the staged runtime library.
-3. Run `./build.sh` or `scripts/build-in-container.sh` to refresh
-   `packages/` and `manifest.json`.
-4. Commit the source packages, generated `.kpkg` artifacts, `packages/`,
-   and the regenerated repository manifest together.
+3. Run `./build.sh` or `scripts/build-in-container.sh` to produce `.kpkg`
+   artifacts under each app's `dist/` directory.
+4. Downstream package indexes (for example `kinstaller-repo`) pin a commit of
+   this repository and publish those artifacts; this repo does not own the
+   index `packages/` tree or `manifest.json`.
 
 ## Recovery Ladder
 

@@ -222,9 +222,9 @@ wiring; C ABI + `MSHookFunction`/`MSFindSymbol` aliases; v1 non-goals respected
   extraction exists; make `ksub new` scaffold the KPM skeleton.
 
 ### R6 — Structure & process  *(D12, D13-header/init)*
-- Decide and record: keep the monorepo (ratify the `A§2` deviation in
-  [kindle-substrate.md](kindle-substrate.md)) **or** split runtime/toolchain into
-  the separate `kindle-substrate` repo and publish only `.kpkg` here.
+- D12 is done: runtime/toolchain live in `bd452/kindle-substrate` (this repo is
+  the source of truth); package indexes publish only `.kpkg` artifacts from a
+  pinned submodule commit.
 - Generate `ksubstrate.h` via cbindgen; have the bootstrap call the optional
   `ksubstrate_init` after `dlopen` per `A§4.3`.
 
@@ -238,7 +238,7 @@ R1 (Dobby) ───────┐
 R3 (addressing) ──┼──► R5 (%hookf/KSYM needs R3)
 R2 (PLT/GOT) ─────┘
 R4a,R4c,R4d (session correctness) ── parallel to R1–R3
-R6 (structure) ── any time; ratify before more source moves
+R6 (cbindgen / bootstrap init) ── remaining structure polish; D12 already done
 ```
 
 Items that separate "loads code into a process I launch" from "Substrate-class

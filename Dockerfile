@@ -1,7 +1,7 @@
 # Cross-build image for this repo (Linux x86_64 toolchains + Rust).
 #
 # Build (from the repo root; always force amd64 on Apple Silicon):
-#   docker build --platform linux/amd64 -t kinstaller-build .
+#   docker build --platform linux/amd64 -t kindle-substrate-build .
 #
 # See README.md for build recipes.
 FROM ubuntu:24.04

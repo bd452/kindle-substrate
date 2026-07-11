@@ -6,12 +6,12 @@
 #
 # Usage (from repo root):
 #   ./scripts/build-in-container.sh                  # full ./build.sh
-#   ./scripts/build-in-container.sh apps/com.bd452.signalkitdemo/build.sh
+#   ./scripts/build-in-container.sh apps/com.bd452.ksubstratedemo/build.sh
 #   ./scripts/build-in-container.sh bash              # interactive shell
 #   ./scripts/build-in-container.sh bash -lc '…'      # custom command
 #
 # First run builds the image (several minutes: apt + rustup + toolchain tarballs).
-# Later runs reuse kinstaller-build:latest. If the local image predates this
+# Later runs reuse kindle-substrate-build:latest. If the local image predates this
 # helper's expected toolchain, it is rebuilt automatically.
 set -euo pipefail
 
