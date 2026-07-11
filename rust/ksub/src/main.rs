@@ -106,6 +106,7 @@ fn command_build(args: Vec<String>) -> Result<(), String> {
             "kindlepw2" => "CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABI_LINKER",
             _ => unreachable!(),
         };
+        let float_abi_link_arg = kindle_float_abi_link_arg(&platform)?;
         let tool_root = env::var("KOXTOOLCHAIN_ROOT").unwrap_or_else(|_| "/opt/x-tools".to_owned());
         let tool_bin = PathBuf::from(tool_root)
             .join("x-tools")
@@ -123,11 +124,16 @@ fn command_build(args: Vec<String>) -> Result<(), String> {
             return Err(format!("runtime SDK library missing at {}; build the Kindle Substrate runtime package first or set KSUBSTRATE_SDK_ROOT", runtime_lib.display()));
         }
         let old_path = env::var("PATH").unwrap_or_default();
+        let rustflags = match env::var("RUSTFLAGS") {
+            Ok(existing) if !existing.is_empty() => format!("{existing} {float_abi_link_arg}"),
+            _ => float_abi_link_arg.to_owned(),
+        };
         run_status(
             Command::new("cargo")
                 .args(["build", "--release", "--target", target])
                 .env("PATH", format!("{}:{old_path}", tool_bin.display()))
                 .env(linker_env, linker)
+                .env("RUSTFLAGS", rustflags)
                 .env("KSUBSTRATE_LIB_DIR", &runtime_lib),
         )?;
         stage_tweak(&platform, target)
@@ -332,6 +338,14 @@ fn current_crate_name() -> Result<String, String> {
     name.ok_or_else(|| "package name not found in Cargo.toml".to_owned())
 }
 
+fn kindle_float_abi_link_arg(platform: &str) -> Result<&'static str, String> {
+    match platform {
+        "kindlehf" => Ok("-C link-arg=-mfloat-abi=hard"),
+        "kindlepw2" => Ok("-C link-arg=-mfloat-abi=softfp"),
+        other => Err(format!("unknown platform: {other}")),
+    }
+}
+
 fn install_script() -> String {
     r#"#!/bin/sh
 set -e
@@ -503,11 +517,24 @@ mod tests {
             .contains("/var/local/ksubstrate/tweaks"));
         assert!(!project.join("tweak.ksfilter").exists());
         assert!(!project.join("package/tweak/tweak.ksfilter").exists());
-        let tweak_manifest = fs::read_to_string(project.join("package/tweak/manifest.json")).unwrap();
+        let tweak_manifest =
+            fs::read_to_string(project.join("package/tweak/manifest.json")).unwrap();
         assert!(tweak_manifest.contains("\"manifest_version\": 2"));
         assert!(tweak_manifest.contains("\"targets\": [\"pillow\"]"));
 
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn kindle_builds_pass_the_float_abi_to_the_linker_driver() {
+        assert_eq!(
+            kindle_float_abi_link_arg("kindlehf").unwrap(),
+            "-C link-arg=-mfloat-abi=hard"
+        );
+        assert_eq!(
+            kindle_float_abi_link_arg("kindlepw2").unwrap(),
+            "-C link-arg=-mfloat-abi=softfp"
+        );
     }
 }
 

@@ -29,19 +29,22 @@ fi
 mkdir -p "$APP_ROOT/package/lib/kindlehf" "$APP_ROOT/package/lib/kindlepw2" \
     "$APP_ROOT/package/bin/kindlehf" "$APP_ROOT/package/bin/kindlepw2" \
     "$APP_ROOT/package/include" "$APP_ROOT/package/tweaks" \
-    "$APP_ROOT/package/diagnostics/com.bd452.ksubstrateprobe"
+    "$APP_ROOT/package/diagnostics/com.bd452.ksubstrateprobe/lib/kindlehf" \
+    "$APP_ROOT/package/diagnostics/com.bd452.ksubstrateprobe/lib/kindlepw2"
+rm -f "$APP_ROOT/package/diagnostics/com.bd452.ksubstrateprobe/tweak.so"
 
 build_platform() {
     local platform=$1
-    local cross_tc tool_bin rust_target linker_env target_dir release_dir lib_dir
+    local cross_tc tool_bin rust_target linker_env rustflags target_dir release_dir lib_dir
     cross_tc="$(kox_prefix "$platform")"
     tool_bin="$(kox_tool_bin "$platform")"
     rust_target="$(kox_rust_target "$platform")"
     linker_env="$(kox_rust_linker_env "$platform")"
+    rustflags="${RUSTFLAGS:+$RUSTFLAGS }$(kox_rust_link_arg "$platform")"
     lib_dir="$APP_ROOT/package/lib/${platform}"
 
     echo "==> Building Kindle Substrate runtime for $platform ($rust_target)"
-    env CROSS_TC="$cross_tc" PATH="$tool_bin:$PATH" \
+    env CROSS_TC="$cross_tc" PATH="$tool_bin:$PATH" RUSTFLAGS="$rustflags" \
         "$linker_env=$tool_bin/${cross_tc}-gcc" \
         cargo build --manifest-path "$RUST_DIR/Cargo.toml" --release --target "$rust_target" \
         -p ksubstrate -p ksubstrate-bootstrap -p ksubstrate-cli -p ksubstrated
@@ -60,7 +63,8 @@ build_platform() {
 
     # Probe needs the just-staged runtime lib (KSUBSTRATE_LIB_DIR → dynamic link).
     echo "==> Building inheritance probe for $platform"
-    env CROSS_TC="$cross_tc" PATH="$tool_bin:$PATH" KSUBSTRATE_LIB_DIR="$lib_dir" \
+    env CROSS_TC="$cross_tc" PATH="$tool_bin:$PATH" RUSTFLAGS="$rustflags" \
+        KSUBSTRATE_LIB_DIR="$lib_dir" \
         "$linker_env=$tool_bin/${cross_tc}-gcc" \
         cargo build --manifest-path "$RUST_DIR/Cargo.toml" --release --target "$rust_target" \
         -p ksubstrate-probe-tweak
@@ -68,7 +72,12 @@ build_platform() {
     # Opt-in diagnostic (A§6.4): * filter would match every process, so it ships
     # under diagnostics/ — copy into the live tweaks dir only when probing.
     install -m 644 "$release_dir/libksubstrate_probe_tweak.so" \
-        "$APP_ROOT/package/diagnostics/com.bd452.ksubstrateprobe/tweak.so"
+        "$APP_ROOT/package/diagnostics/com.bd452.ksubstrateprobe/lib/${platform}/tweak.so"
+
+    validate_kox_elf_loader "$platform" "$lib_dir/libksubstrate.so"
+    validate_kox_elf_loader "$platform" "$lib_dir/libksubstrate-bootstrap.so"
+    validate_kox_elf_loader "$platform" \
+        "$APP_ROOT/package/diagnostics/com.bd452.ksubstrateprobe/lib/${platform}/tweak.so"
 }
 
 build_platform kindlehf

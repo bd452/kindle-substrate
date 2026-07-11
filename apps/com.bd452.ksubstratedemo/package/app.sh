@@ -24,4 +24,4 @@ if [ ! -x "$TARGET" ]; then
     exit 1
 fi
 
-KSUBSTRATE_TWEAKS_DIR="$(pwd)/tweaks" exec "$KSUB" run "$TARGET"
+KSUBSTRATE_TWEAKS_DIR=/var/local/ksubstrate/tweaks exec "$KSUB" run "$TARGET"

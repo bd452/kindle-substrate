@@ -12,8 +12,11 @@ Expected staged files:
 ```text
 package/bin/kindlehf/ksubstrate-demo-target
 package/bin/kindlepw2/ksubstrate-demo-target
-package/tweaks/com.bd452.ksubstratedemo/tweak.so
+package/tweaks/com.bd452.ksubstratedemo/lib/kindlehf/tweak.so
+package/tweaks/com.bd452.ksubstratedemo/lib/kindlepw2/tweak.so
 ```
 
-The checked-in manifest explicitly targets `ksubstrate-demo-target`, so the installed
-runtime bootstrap should load the sample tweak only for that target process.
+The installer selects the device ABI and atomically registers that build as
+`/var/local/ksubstrate/tweaks/com.bd452.ksubstratedemo/tweak.so`. The checked-in
+manifest explicitly targets `ksubstrate-demo-target`, so the runtime bootstrap
+loads the sample tweak only for that target process.

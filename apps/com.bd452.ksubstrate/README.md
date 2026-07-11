@@ -20,6 +20,8 @@ package/bin/<platform>/ksubstrated
 package/bin/<platform>/ksubstrate
 package/include/ksubstrate.h
 package/diagnostics/com.bd452.ksubstrateprobe/
+  lib/kindlehf/tweak.so
+  lib/kindlepw2/tweak.so
 ```
 
 The installed package creates a **Kindle Substrate** menu in KUAL for enabling,

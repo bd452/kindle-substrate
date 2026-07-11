@@ -12,15 +12,18 @@ source "$REPO_ROOT/scripts/koxtoolchain.sh"
 require_kox
 
 mkdir -p "$APP_ROOT/package/bin/kindlehf" "$APP_ROOT/package/bin/kindlepw2" \
-    "$APP_ROOT/package/tweaks/com.bd452.ksubstratedemo"
+    "$APP_ROOT/package/tweaks/com.bd452.ksubstratedemo/lib/kindlehf" \
+    "$APP_ROOT/package/tweaks/com.bd452.ksubstratedemo/lib/kindlepw2"
+rm -f "$APP_ROOT/package/tweaks/com.bd452.ksubstratedemo/tweak.so"
 
 build_platform() {
     local platform=$1
-    local cross_tc tool_bin rust_target linker_env target_dir release_dir runtime_lib_dir
+    local cross_tc tool_bin rust_target linker_env rustflags target_dir release_dir runtime_lib_dir
     cross_tc="$(kox_prefix "$platform")"
     tool_bin="$(kox_tool_bin "$platform")"
     rust_target="$(kox_rust_target "$platform")"
     linker_env="$(kox_rust_linker_env "$platform")"
+    rustflags="${RUSTFLAGS:+$RUSTFLAGS }$(kox_rust_link_arg "$platform")"
     runtime_lib_dir="$RUNTIME_APP/package/lib/${platform}"
 
     if [[ ! -f "$runtime_lib_dir/libksubstrate.so" ]]; then
@@ -30,7 +33,8 @@ build_platform() {
     fi
 
     echo "==> Building Kindle Substrate demo for $platform ($rust_target)"
-    env CROSS_TC="$cross_tc" PATH="$tool_bin:$PATH" KSUBSTRATE_LIB_DIR="$runtime_lib_dir" \
+    env CROSS_TC="$cross_tc" PATH="$tool_bin:$PATH" RUSTFLAGS="$rustflags" \
+        KSUBSTRATE_LIB_DIR="$runtime_lib_dir" \
         "$linker_env=$tool_bin/${cross_tc}-gcc" \
         cargo build --manifest-path "$RUST_DIR/Cargo.toml" --release --target "$rust_target" \
         -p ksubstrate-demo-target -p ksubstrate-sample-tweak
@@ -41,7 +45,10 @@ build_platform() {
     install -m 755 "$release_dir/ksubstrate-demo-target" \
         "$APP_ROOT/package/bin/${platform}/ksubstrate-demo-target"
     install -m 644 "$release_dir/libksubstrate_sample_tweak.so" \
-        "$APP_ROOT/package/tweaks/com.bd452.ksubstratedemo/tweak.so"
+        "$APP_ROOT/package/tweaks/com.bd452.ksubstratedemo/lib/${platform}/tweak.so"
+
+    validate_kox_elf_loader "$platform" \
+        "$APP_ROOT/package/tweaks/com.bd452.ksubstratedemo/lib/${platform}/tweak.so"
 }
 
 build_platform kindlehf

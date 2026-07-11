@@ -10,12 +10,19 @@ DEST="$ROOT/$ID"
 STAGE="$ROOT/.$ID.staging.$$"
 OLD="$ROOT/.$ID.retired.$$"
 
+if [ -f /lib/ld-linux-armhf.so.3 ]; then
+    PLAT=kindlehf
+else
+    PLAT=kindlepw2
+fi
+LIB="$SRC/lib/$PLAT/tweak.so"
+
 test -f "$SRC/manifest.json"
-test -f "$SRC/tweak.so"
+test -f "$LIB"
 mkdir -p "$ROOT"
 mkdir "$STAGE"
 cp "$SRC/manifest.json" "$STAGE/manifest.json"
-cp "$SRC/tweak.so" "$STAGE/tweak.so"
+cp "$LIB" "$STAGE/tweak.so"
 test -s "$STAGE/manifest.json"
 test -s "$STAGE/tweak.so"
 
