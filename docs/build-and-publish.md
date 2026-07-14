@@ -1,15 +1,15 @@
 # Building, Authoring, and Publishing
 
-This document defines the two supported workflows: publishing the Kindle
-Substrate runtime through the KPM repository and authoring a separate KPM tweak
-that depends on that runtime.
+This document defines the two supported workflows: releasing Kindle Substrate
+artifacts for consumption by a KPM repository and authoring a separate KPM
+tweak that depends on that runtime.
 
 ## Build and publish the runtime packages
 
 Kindle Substrate builds two KPM artifacts in dependency order:
 
 1. `com.bd452.ksubstrate` provides the runtime, bootstrap, daemon, CLI, and SDK.
-2. `com.bd452.ksubstratedemo` depends on `com.bd452.ksubstrate >= 0.1.5` and
+2. `com.bd452.ksubstratedemo` depends on `com.bd452.ksubstrate >= 0.1.6` and
    validates inline and import hooks in a self-contained target.
 
 From a recursive clone of this repository, run:
@@ -18,25 +18,46 @@ From a recursive clone of this repository, run:
 ./scripts/build-in-container.sh
 ```
 
-The artifacts are written to:
+The repository pins Kindle KPM devkit 0.1.0 in `.kpm-devkit-version`. The
+`scripts/kpm-dev` resolver uses `KPM_DEV`, a `kpm-dev` executable on `PATH`, or
+a sibling `../kindle-kpm-devkit/bin/kpm-dev`, in that order. The compatibility
+`scripts/pack-app.sh` wrapper stages each package and delegates manifest
+validation, deterministic packing, and archive verification to that devkit.
+
+The verified artifacts are written to:
 
 ```text
 apps/com.bd452.ksubstrate/dist/*.kpkg
 apps/com.bd452.ksubstratedemo/dist/*.kpkg
 ```
 
-`kinstaller-repo` is the distribution owner. It pins this repository at
-`components/kindle-substrate`, builds the runtime before the demo, and adds both
-artifacts to its `manifest.json` and `packages/` tree. From a recursive clone of
-that repository, the intended production command is:
+This source repository owns those builds and their immutable release artifacts.
+For tags beginning with `v`, GitHub Actions publishes both `.kpkg` files and one
+`release-metadata.json` descriptor. The descriptor records the source commit
+and tag plus each artifact's URL, SHA-256, size, manifest fields, and dependency
+metadata. Runtime and demo intentionally share one descriptor because they are
+versioned and validated as a coupled package set.
+
+To generate the same descriptor locally after a package build:
 
 ```sh
-./scripts/build-in-container.sh
+./scripts/generate-release-metadata.sh \
+  --base-url https://github.com/bd452/kindle-substrate/releases/download/v0.1.6 \
+  --repository bd452/kindle-substrate \
+  --commit "$(git rev-parse HEAD)" \
+  --tag v0.1.6 \
+  --output dist/release-metadata.json
 ```
 
-The resulting repository manifest must retain the demo dependency on
-`com.bd452.ksubstrate`. Publishing is performed by the downstream repository's
-GitHub Pages workflow; this repository does not publish a package index.
+The downstream KPM registry pins and verifies this descriptor, then incorporates
+the two package records into its catalog and published index. It owns catalog
+composition and index hosting; it does not compile Kindle Substrate or vendor
+this repository as a source submodule. The generated catalog must retain the
+demo dependency on `com.bd452.ksubstrate`.
+
+A successful host test, cross-build, devkit verification, or GitHub release is
+build evidence only. It does not prove the runtime safe on a physical Kindle;
+the device validation requirements below remain release-quality evidence gates.
 
 ## Fileless Home apps
 
@@ -120,7 +141,7 @@ docker run --rm --platform linux/amd64 \
   -v "$PWD":/tweak \
   -e KOXTOOLCHAIN_ROOT=/opt/x-tools \
   -e KSUBSTRATE_SDK_ROOT=/sdk \
-  -w /tweak kindle-substrate-build:latest \
+  -w /tweak kindle-substrate-build:kpm-devkit-0.1.0 \
   /sdk/rust/target-kindle/release/ksub build --platform kindlehf
 
 docker run --rm --platform linux/amd64 \
@@ -128,7 +149,7 @@ docker run --rm --platform linux/amd64 \
   -v "$PWD":/tweak \
   -e KOXTOOLCHAIN_ROOT=/opt/x-tools \
   -e KSUBSTRATE_SDK_ROOT=/sdk \
-  -w /tweak kindle-substrate-build:latest \
+  -w /tweak kindle-substrate-build:kpm-devkit-0.1.0 \
   /sdk/rust/target-kindle/release/ksub build --platform kindlepw2
 
 /absolute/path/to/kindle-substrate/rust/target/release/ksub package

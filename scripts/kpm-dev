@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Resolve and run the version of kindle-kpm-devkit pinned by this repository.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+EXPECTED_VERSION="$(tr -d '[:space:]' < "$REPO_ROOT/.kpm-devkit-version")"
+
+if [[ -z "$EXPECTED_VERSION" ]]; then
+    echo "error: .kpm-devkit-version is empty" >&2
+    exit 1
+fi
+
+canonical_path() {
+    local path="$1"
+    local dir
+    dir="$(cd "$(dirname "$path")" 2>/dev/null && pwd -P)" || return 1
+    printf '%s/%s\n' "$dir" "$(basename "$path")"
+}
+
+resolve_kpm_dev() {
+    local candidate=""
+    local path_candidate=""
+
+    if [[ -n "${KPM_DEV:-}" ]]; then
+        if [[ -d "$KPM_DEV" ]]; then
+            candidate="$KPM_DEV/bin/kpm-dev"
+        else
+            candidate="$KPM_DEV"
+        fi
+        if [[ ! -x "$candidate" ]]; then
+            echo "error: KPM_DEV does not resolve to an executable kpm-dev: $candidate" >&2
+            return 1
+        fi
+    else
+        path_candidate="$(command -v kpm-dev 2>/dev/null || true)"
+        if [[ -n "$path_candidate" ]] \
+            && [[ "$(canonical_path "$path_candidate")" != "$(canonical_path "${BASH_SOURCE[0]}")" ]]; then
+            candidate="$path_candidate"
+        elif [[ -x "$REPO_ROOT/../kindle-kpm-devkit/bin/kpm-dev" ]]; then
+            candidate="$REPO_ROOT/../kindle-kpm-devkit/bin/kpm-dev"
+        else
+            echo "error: kpm-dev $EXPECTED_VERSION was not found" >&2
+            echo "Install it on PATH, set KPM_DEV, or clone kindle-kpm-devkit beside this repository." >&2
+            return 1
+        fi
+    fi
+
+    if [[ "$(canonical_path "$candidate")" == "$(canonical_path "${BASH_SOURCE[0]}")" ]]; then
+        echo "error: KPM_DEV points to the repository resolver itself, not a kindle-kpm-devkit executable" >&2
+        return 1
+    fi
+
+    printf '%s\n' "$candidate"
+}
+
+KPM_DEV_BIN="$(resolve_kpm_dev)"
+VERSION_OUTPUT="$("$KPM_DEV_BIN" --version 2>/dev/null || true)"
+if [[ "$VERSION_OUTPUT" != "kpm-dev $EXPECTED_VERSION" ]]; then
+    echo "error: expected kpm-dev $EXPECTED_VERSION, got '${VERSION_OUTPUT:-no version output}' from $KPM_DEV_BIN" >&2
+    exit 1
+fi
+
+exec "$KPM_DEV_BIN" "$@"

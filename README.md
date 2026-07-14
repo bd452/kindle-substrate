@@ -26,10 +26,17 @@ Host tests:
 
     cargo test --manifest-path rust/Cargo.toml --workspace
 
-The package build writes .kpkg artifacts under each app's dist directory.
-This repository is the source of truth for the runtime and toolchain;
-`kinstaller-repo` can consume a pinned commit as a submodule and publish those
-artifacts in its package index.
+The local Dockerfile and CI inherit the pinned
+`ghcr.io/bd452/kindle-kpm-build:v0.1.0@sha256:c7bd7e4041717bb16765b97d6fe4f578f40d144fa3628fcad81271e22f18a69b` environment from
+`kindle-kpm-devkit`. This repository retains only the Substrate-specific build
+and packaging commands.
+
+The package build writes `.kpkg` artifacts under each app's `dist` directory.
+Packaging is provided by Kindle KPM devkit 0.1.0, resolved through `KPM_DEV`,
+`PATH`, or a sibling `../kindle-kpm-devkit` checkout. This repository is the
+source of truth for the runtime, toolchain, and its released package artifacts.
+The KPM registry consumes the release descriptor rather than rebuilding this
+repository as a source submodule.
 
 The supported runtime publishing and third-party tweak authoring workflows are
 documented in [`docs/build-and-publish.md`](docs/build-and-publish.md).

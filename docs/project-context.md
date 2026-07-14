@@ -13,9 +13,10 @@ demo, documentation, and package sources were implemented together. As the
 project grew beyond a package recipe, it became clear that it needed its own
 repository, release lifecycle, test surface, and architecture boundary.
 
-This repository is that boundary. `kinstaller-repo` remains the distribution
-repository: it consumes a pinned Kindle Substrate commit as a submodule, builds
-the two KPM packages, and publishes their artifacts in its package index.
+This repository is that boundary. The KPM registry remains the distribution
+repository, but the integration is artifact-first: Kindle Substrate builds and
+releases its two packages plus a verifiable descriptor, and the registry
+consumes that descriptor without compiling this source repository.
 
 ## Extraction History
 
@@ -31,9 +32,10 @@ the parent repository.
 This repository is the source of truth for Kindle Substrate runtime and
 toolchain work. It is published at
 [`bd452/kindle-substrate`](https://github.com/bd452/kindle-substrate).
-`kinstaller-repo` is expected to consume a pinned submodule commit under
-`components/kindle-substrate` and publish the resulting packages; that parent
-cutover is outside this repository's scope.
+The original registry integration consumed a pinned submodule commit under
+`components/kindle-substrate`. The current boundary supersedes that arrangement
+with immutable release artifacts and `release-metadata.json`; registry cutover
+and publication remain outside this repository's scope.
 
 ## Product Model
 
@@ -166,14 +168,15 @@ This repository owns:
 - Dobby integration and the public hook ABI.
 - Device session behavior and recovery logic.
 - Tweak format and SDK conventions.
-- Runtime/demo package source and independent package builds.
+- Runtime/demo package source, independent package builds, and tagged release
+  artifacts with a combined registry-facing descriptor.
 - Architecture, analysis, and device verification documentation.
 
-`kinstaller-repo` owns:
+The KPM registry owns:
 
-- The pinned submodule commit used for publication.
-- Repository-wide package build ordering.
-- Published `.kpkg` artifacts and `manifest.json`.
+- Pinned, checksum-verified source release descriptors.
+- Repository-wide dependency validation and catalog composition.
+- The published KPM `manifest.json`.
 - GitHub Pages deployment for the KPM repository.
 
 This boundary allows Kindle Substrate to evolve and be tested independently

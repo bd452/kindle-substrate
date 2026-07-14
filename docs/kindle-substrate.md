@@ -2,8 +2,9 @@
 
 This repository carries the Kindle Substrate implementation: the runtime engine
 ABI, bootstrap, daemon, device CLI, demo target, sample tweak, host toolchain,
-and KPM package sources. `bd452/kinstaller-repo` consumes this project as a
-submodule and remains the package distribution surface.
+and KPM package sources. This repository releases its package artifacts and a
+combined descriptor; the downstream KPM registry consumes that descriptor and
+remains the package distribution surface.
 
 For the forward roadmap (milestones, decisions, exit gates), see
 [architecture-strategy.md](architecture-strategy.md). This document is the
@@ -260,8 +261,9 @@ entire region under consideration is verified before Dobby patches.
 The host-side `ksub` toolchain lives in the Rust workspace and produces
 artifacts that match the package contract above.
 
-See [build-and-publish.md](build-and-publish.md) for the reproducible downstream
-KPM publishing flow and the standalone third-party tweak authoring flow.
+See [build-and-publish.md](build-and-publish.md) for the reproducible
+artifact-first KPM publishing flow and the standalone third-party tweak
+authoring flow.
 
 Command status (this repo is an MVP; not every command is a finished pipeline):
 
@@ -297,9 +299,9 @@ prologue signatures because firmware-specific RVAs can drift.
    sample tweak against the staged runtime library.
 3. Run `./build.sh` or `scripts/build-in-container.sh` to produce `.kpkg`
    artifacts under each app's `dist/` directory.
-4. Downstream package indexes (for example `kinstaller-repo`) pin a commit of
-   this repository and publish those artifacts; this repo does not own the
-   index `packages/` tree or `manifest.json`.
+4. A `v*` tag publishes both packages with one checksummed release descriptor.
+   Downstream package indexes pin that descriptor and compose it into their
+   catalog; this repo does not own the index `manifest.json`.
 
 ## Recovery Ladder
 

@@ -148,7 +148,8 @@ demo hid #1 and #2.
   toolchain *source* live in a separate `kindle-substrate` repo; only `.kpkg`
   artifacts land here.
 - **Built:** runtime and toolchain source now live in `bd452/kindle-substrate`;
-  `kinstaller-repo` consumes a pinned submodule and publishes the packages.
+  this source repository publishes checksummed package artifacts and a combined
+  descriptor for consumption by the distribution repository.
 - **Direction:** RESOLVED. **Severity:** was Low. **Status:** DONE.
 - **Remediation:** R6.
 
@@ -225,8 +226,8 @@ wiring; C ABI + `MSHookFunction`/`MSFindSymbol` aliases; v1 non-goals respected
 
 ### R6 — Structure & process  *(D12, D13-header/init)*
 - D12 is done: runtime/toolchain live in `bd452/kindle-substrate` (this repo is
-  the source of truth); package indexes publish only `.kpkg` artifacts from a
-  pinned submodule commit.
+  the source of truth); package indexes consume its immutable `.kpkg` release
+  artifacts and descriptor without rebuilding a pinned source submodule.
 - Generate `ksubstrate.h` via cbindgen; have the bootstrap call the optional
   `ksubstrate_init` after `dlopen` per `A§4.3`.
 
