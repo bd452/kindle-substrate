@@ -9,7 +9,7 @@ tweak that depends on that runtime.
 Kindle Substrate builds two KPM artifacts in dependency order:
 
 1. `com.bd452.ksubstrate` provides the runtime, bootstrap, daemon, CLI, and SDK.
-2. `com.bd452.ksubstratedemo` depends on `com.bd452.ksubstrate >= 0.1.6` and
+2. `com.bd452.ksubstratedemo` depends on `com.bd452.ksubstrate >= 0.1.7` and
    validates inline and import hooks in a self-contained target.
 
 From a recursive clone of this repository, run:
@@ -42,10 +42,10 @@ To generate the same descriptor locally after a package build:
 
 ```sh
 ./scripts/generate-release-metadata.sh \
-  --base-url https://github.com/bd452/kindle-substrate/releases/download/v0.1.6 \
+  --base-url https://github.com/bd452/kindle-substrate/releases/download/v0.1.7 \
   --repository bd452/kindle-substrate \
   --commit "$(git rev-parse HEAD)" \
-  --tag v0.1.6 \
+  --tag v0.1.7 \
   --output dist/release-metadata.json
 ```
 

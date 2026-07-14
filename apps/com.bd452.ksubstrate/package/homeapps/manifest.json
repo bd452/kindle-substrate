@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "id": "com.bd452.ksubstrate.homeapps",
   "name": "Kindle Substrate Home Apps",
-  "version": [0, 1, 6],
+  "version": [0, 1, 7],
   "library": "tweak.so",
   "initialization": "constructor",
   "targets": ["pillow"]
