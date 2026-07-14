@@ -26,6 +26,11 @@ Host tests:
 
     cargo test --manifest-path rust/Cargo.toml --workspace
 
+The local Dockerfile and CI inherit the pinned
+`ghcr.io/bd452/kindle-kpm-build:v0.1.0` environment from
+`kindle-kpm-devkit`. This repository retains only the Substrate-specific build
+and packaging commands.
+
 The package build writes `.kpkg` artifacts under each app's `dist` directory.
 Packaging is provided by Kindle KPM devkit 0.1.0, resolved through `KPM_DEV`,
 `PATH`, or a sibling `../kindle-kpm-devkit` checkout. This repository is the

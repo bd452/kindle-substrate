@@ -141,7 +141,7 @@ docker run --rm --platform linux/amd64 \
   -v "$PWD":/tweak \
   -e KOXTOOLCHAIN_ROOT=/opt/x-tools \
   -e KSUBSTRATE_SDK_ROOT=/sdk \
-  -w /tweak kindle-substrate-build:latest \
+  -w /tweak kindle-substrate-build:kpm-devkit-0.1.0 \
   /sdk/rust/target-kindle/release/ksub build --platform kindlehf
 
 docker run --rm --platform linux/amd64 \
@@ -149,7 +149,7 @@ docker run --rm --platform linux/amd64 \
   -v "$PWD":/tweak \
   -e KOXTOOLCHAIN_ROOT=/opt/x-tools \
   -e KSUBSTRATE_SDK_ROOT=/sdk \
-  -w /tweak kindle-substrate-build:latest \
+  -w /tweak kindle-substrate-build:kpm-devkit-0.1.0 \
   /sdk/rust/target-kindle/release/ksub build --platform kindlepw2
 
 /absolute/path/to/kindle-substrate/rust/target/release/ksub package

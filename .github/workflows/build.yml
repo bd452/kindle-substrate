@@ -8,27 +8,18 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      KPM_DEV: ${{ github.workspace }}/_kpm-devkit/bin/kpm-dev
+    container:
+      image: ghcr.io/bd452/kindle-kpm-build:v0.1.0
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Check out Kindle KPM devkit 0.1.0
-        uses: actions/checkout@v4
-        with:
-          repository: bd452/kindle-kpm-devkit
-          ref: v0.1.0
-          path: _kpm-devkit
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: armv7-unknown-linux-gnueabihf,armv7-unknown-linux-gnueabi
+      - name: Check shared devkit version
+        run: |
+          test "$(cat .kpm-devkit-version)" = "0.1.0"
+          test "$(kpm-dev --version)" = "kpm-dev 0.1.0"
       - name: Host tests
         run: cargo test --manifest-path rust/Cargo.toml --workspace
-      - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y clang cmake libclang-dev
-      - name: Install koxtoolchain
-        run: ./scripts/setup-koxtoolchain.sh
       - name: Build packages
         run: ./build.sh
       - name: Stage package artifacts

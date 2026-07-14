@@ -40,6 +40,7 @@ apps/*/package/lib/
 apps/*/package/include/
 apps/*/package/tweaks/**/tweak.so
 apps/*/package/diagnostics/**/tweak.so
+apps/*/package/homeapps/**/tweak.so
 
 # Firmware pulls and local reverse-engineering dumps (notes/ stay tracked)
 analysis/pulled/**
