@@ -8,10 +8,18 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      KPM_DEV: ${{ github.workspace }}/_kpm-devkit/bin/kpm-dev
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Check out Kindle KPM devkit 0.1.0
+        uses: actions/checkout@v4
+        with:
+          repository: bd452/kindle-kpm-devkit
+          ref: v0.1.0
+          path: _kpm-devkit
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: armv7-unknown-linux-gnueabihf,armv7-unknown-linux-gnueabi
@@ -23,3 +31,37 @@ jobs:
         run: ./scripts/setup-koxtoolchain.sh
       - name: Build packages
         run: ./build.sh
+      - name: Stage package artifacts
+        run: |
+          mkdir -p dist
+          cp apps/com.bd452.ksubstrate/dist/*.kpkg dist/
+          cp apps/com.bd452.ksubstratedemo/dist/*.kpkg dist/
+      - name: Generate release metadata
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          ./scripts/generate-release-metadata.sh \
+            --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}" \
+            --repository "$GITHUB_REPOSITORY" \
+            --commit "$GITHUB_SHA" \
+            --tag "$GITHUB_REF_NAME" \
+            --output dist/release-metadata.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: dist/**
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
